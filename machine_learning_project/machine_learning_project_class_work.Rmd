@@ -1,0 +1,368 @@
+---
+title: "logistic_regression_assignment_ali_abid"
+author: "Ali Abid"
+date: "2024-11-03"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction and Situational Context
+
+Despite being the fifth most populous country in the world, Pakistan is only able to spend as much as 1.7 percent of its GDP on education (Abbasi, 2023). The tumultuous domestic political climate, in conjunction with the global geopolitical landscape, has undeniably resulted in a series of macroeconomic crises within the nation. These crises have unfortunately led to widespread inflation, a rise in poverty, and a profound literacy crisis that poses significant challenges for future generations. A sizable children population (around 26 million) remains out of school (Haider, 2024) which can have devastating impact on the opportunities of the country to grow out of these crises.
+
+# Purpose
+
+The purpose of this research project is to understand the schooling, household and climate change factors that contribute to predicting whether a student exhibits general knowledge or not. The dataset used in this analysis is the ASER 2023 rural dataset which is a household survey conducted in Pakistan to assess the learning levels of children in the country. The dataset contains information on the academic outcomes including whether a student exhibited general knowledge while being surveyed, the said students' household characteristics, and the impact of climate change as reported by their households. The analysis will focus on the factors that contribute to the general knowledge of students in Pakistan and will use logistic regression to predict the outcome in a probabilistic form based on these predictors.
+
+# Data
+
+The dataset used in this analysis is the ASER 2023 dataset which is a household survey conducted in Pakistan to assess the learning levels of children in the rural side of the country. The first dataset `aser_child` contains information on the academic outcomes of the children including their educational status, grades, and reading levels. The second dataset `aser_household` contains information on the household characteristics including the number of earning members, the presence of a car or motorcycle, and the impact of climate change on the household. The two datasets are merged on the HouseholdId column to create a single dataset for analysis.
+
+The variables of interest are: RNAME (Region Name), HouseholdCounter (People in a Household), EarningMembers (Earning Members in a Household), Car (Number of Cars in a Household if any), MotorCycle (Number of Cars in a Household if any), TravelTime (Time to School), ClimateChange (Climate Change Awareness), FloodImpacted (Impacted by Flood), EarningImpacted (Earning Impacted by Climate Change), PsychologicalImpacted (Psychologically Impacted by Climate Change), SchoolingAffected (Schooling Affected by Climate Change), LocalLangReadingLevel (Local Language Reading Level), ArithmeticLevel (Arithmetic Level), EnglishReadingLevel (English Reading Level), and GeneralKnowledge (Binary Variable showing whether a student exhibited General Knowledge while being tested or not).
+
+**Predictor Variables**: HouseholdCounter, EarningMembers, TravelTime, Car, MotorCycle, TravelTime, ClimateChange, FloodImpacted, EarningImpacted, PsychologicalImpacted, SchoolingAffected, ArithmeticLevel, EnglishReadingLevel, LocalLangReadingLevel
+
+**Outcome Variables**: GeneralKnowledge
+
+
+# Research Question
+
+What academic, household and climate change factors contribute to predicting whether a student exhibits general knowledge or not?
+
+### Data Wrangling
+
+Loading the required libraries and the datasets
+
+```{r}
+# Load the libraries
+library(tidyverse)
+library(readr)
+library(caret)
+library(psych)
+library(ROSE)
+```
+
+```{r}
+# Load the data
+aser_child <- read_csv("ITAASER2023Child.csv")
+aser_household <- read_csv("ITAASER2023Household.csv") %>% 
+  rename(HHID = HouseholdId) # Renaming the HouseholdId column to HHID for merging with the Child Dataset
+```
+
+```{r}
+# Merging the two datasets
+aser_child_household_data <- aser_child %>% 
+  left_join(aser_household, by = "HHID")
+```
+
+
+```{r}
+# --- 1. Selecting Relevant Variables from Household-Level, and Child-Level Observations---
+aser_child_household_data <- aser_child_household_data %>% 
+  select(
+    # Dataset Identifiers
+    RNAME,
+    
+    # Household Characteristics
+    HouseholdCounter, EarningMembers, Car, MotorCycle,
+    
+    # Time to school
+    TravelTime,
+    
+    # Climate Change Impact
+    ClimateChange, FloodImpacted, EarningImpacted, PsychologicalImpacted, SchoolingAffected,
+
+    # Child Characteristics - EducationalStatus, Grades, LocalLangReadingLevel, ArithmeticLevel, EnglishReadingLevel
+    C15, C19, C20, C27
+  ) %>%
+  rename(
+    
+    # Child Characteristics - EducationalStatus, Grades, InstitutionType, LocalLangReadingLevel, ArithmeticLevel, EnglishReadingLevel
+    LocalLangReadingLevel = C15, ArithmeticLevel = C19, EnglishReadingLevel = C20, GeneralKnolwedge = C27
+  
+  )
+```
+
+## Data Cleaning
+
+Since our outcome variable is a binary, we are going to use logistic regression. For that, we need to scale the predictor variables so that their mean is zero and the values are standardized to the standard deviation from zero. We also need to remove the rows with missing values.Similarly, we are mutating the General Knowledge Score to a factor variable for the logistic regression model.
+
+```{r}
+# --- 2. Data Cleaning ---
+# Removing the rows with missing values
+aser_child_household_tib <- aser_child_household_data %>%
+  select(-RNAME) %>% #remove RNAME
+  na.omit() %>% #get rid of rows with NAs
+  mutate(GeneralKnolwedge = as.factor(GeneralKnolwedge)) %>% #change GK Score to factor
+  mutate_at(c(1:13), ~(scale(.) %>% as.vector))
+  #scale all variables so mean is zero and values are standardized to SD from zero
+  #as.vector ensures columns are vectors
+
+library(psych)
+
+psych::describe(aser_child_household_tib) #gives you a lot of descriptives quickly
+```
+
+### Check for Multicollinearity
+
+```{r}
+cor(aser_child_household_tib[,c(1:13)]) #correlation matrix
+corrplot::corrplot(cor(aser_child_household_tib[,c(1:13)]), method = "color", type = "lower", order = "hclust") #correlation plot, threshold for removing is 0.6
+
+```
+Results show that the academic factors (LocalLangReadingLevel, ArithmeticLevel, EnglishReadingLevel) are highly correlated with each other hence, we need to remove these to focus more on the General Knowledge Score. Similarly, the variables related to the impact of climate change (PsychologicalImpacted, SchoolingAffected, EarningImpacted) are also highly correlated with each other.
+
+### Removing Highly Correlated Variables
+
+```{r}
+# Removing highly correlated variables
+aser_child_household_tib <- aser_child_household_tib %>%
+  select(-LocalLangReadingLevel, -ArithmeticLevel, -EnglishReadingLevel, -FloodImpacted, -SchoolingAffected, -EarningImpacted)
+```
+
+### Check for Multicollinearity Again
+
+```{r}
+cor(aser_child_household_tib[,c(1:7)]) #correlation matrix
+```
+Our variables meet the threshold of being less than 0.6 in correlation with each other.
+
+### GLM Logistic Regression Model
+
+We need to rename the levels of the dependent variable to No_GK and Some_GK. 
+
+```{r}
+# Levels of the dependent variable
+levels(aser_child_household_tib$GeneralKnolwedge) # shows the levels of the dependent variable as either 0 or 1
+aser_child_household_tib$GeneralKnolwedge <- factor(aser_child_household_tib$GeneralKnolwedge, 
+                                                    levels = c(0, 1), 
+                                                    labels = c("No_GK", "Some_GK"))
+glimpse(aser_child_household_tib)
+
+aser_child_household_tib %>%
+  group_by(GeneralKnolwedge) %>%
+  summarise_at(vars(1:7), funs(mean, sd))
+```
+### Balancing the Factors
+
+We also need to balance the factors by undersampling the data since there are more observations of 1 in the dataset than 0. We will then fit a logistic regression model to predict the General Knowledge Score of the students based on the predictors.
+
+```{r}
+table(aser_child_household_tib$GeneralKnolwedge) #shows the distribution of the dependent variable (General Knowledge Score)
+#this gives us sample sizes. 
+#IMPORTANTLY, tells us the baseline class 
+#Some_GK = 1. No_GK = 0. In our data, we have 412 observations of No_GK and 1082 observations of Some_GK. Hence, the baseline class should be Some_GK because of the higher number of observations. We need to balance the factors as well.
+
+#grabbing up data we want into a new tibble
+sampling_aser_data <- aser_child_household_tib %>% 
+  filter(GeneralKnolwedge == "No_GK" | GeneralKnolwedge == "Some_GK")
+
+table(sampling_aser_data$GeneralKnolwedge)
+
+under_sample_aser_data <- ovun.sample(GeneralKnolwedge~., data = sampling_aser_data, method = "under", N = 824, seed=123)$data
+
+#$data extracts the data component from the resulting object returned by the ovun.sample()
+
+glimpse(under_sample_aser_data)
+table(under_sample_aser_data$GeneralKnolwedge) #is it done correctly? YES.
+
+```
+
+### Logistic Regression Model
+
+```{r}
+
+aser_child_household_lrm <- glm(GeneralKnolwedge ~ ., data = under_sample_aser_data, family = "binomial")
+summary(aser_child_household_lrm)
+
+#The model shows that the variables EarningMembers and TravelTime are not significant in predicting the General Knowledge Score. Hence, we need to remove these variables from the model.
+
+aser_child_household_lrm <- glm(GeneralKnolwedge ~ HouseholdCounter + Car + MotorCycle + ClimateChange + PsychologicalImpacted, data = under_sample_aser_data, family = "binomial")
+
+summary(aser_child_household_lrm)
+
+#Now the model shows that HouseholdCounter is an insignificant predictor. Let's remove it.
+
+aser_child_household_lrm <- glm(GeneralKnolwedge ~ Car + MotorCycle + ClimateChange + PsychologicalImpacted, data = under_sample_aser_data, family = "binomial")
+
+summary(aser_child_household_lrm)
+
+```
+
+### Interpreting the Model
+
+As per our model, the intercept is -0.07317 (the log odds of a student exhibiting some general knowledge while attempting the ASER test when all other predictors are zero). The p-value is 0.32148 which means it's not statistically significant.
+
+```{r}
+# Odds Ratios
+
+# 2/1 odds ratio above
+intercept_lrm <- coef(aser_child_household_lrm)["(Intercept)"]
+
+exp(intercept_lrm) #odds ratio 0.9294388
+
+(0.32148)/(1+0.9294388)
+
+#odds ratio as the exponential of the coefficient for the predictor variables
+exp(aser_child_household_lrm$coefficients)
+
+#create function for computing probabilities
+probabilities <- function(co_ef){
+  odds <- exp(co_ef)
+  prob <- odds / (1 + odds)
+  return(prob)
+}
+
+#compute probabilities
+probabilities(aser_child_household_lrm$coefficients)
+
+```
+Result shows that the probability of a student exhibiting General Knowledge while being tested when all predictors are zero is 48%
+
+The model shows that the probability of the student exhibiting general knowledge increases to 63% when their parents exhibit some climate change awareness. On the other hand, the probability of the student exhibiting general knowledge decreases to 44% when their parents report that they are psychologically impacted by climate change.
+
+### Adding in Residuals and Predictions 
+
+```{r}
+under_sample_aser_data$residual<-resid(aser_child_household_lrm)
+under_sample_aser_data$predicted.probabilities<-fitted(aser_child_household_lrm)
+glimpse(under_sample_aser_data)
+
+#need to create new columns of actual and predicted values for the confusion matrix, and making sure that they are factors
+
+under_sample_aser_data <- under_sample_aser_data %>% 
+  #assign 0 to No GK, 1 to Some GK
+  mutate(actual = ifelse(GeneralKnolwedge == "Some_GK", 1, 0)) %>% 
+  #assign 1 to .50 and less and 0 to anything else 
+  mutate(predicted = ifelse(predicted.probabilities < .50, 1, 0)) 
+
+under_sample_aser_data$predicted <- as.factor(under_sample_aser_data$predicted)
+under_sample_aser_data$actual <- as.factor(under_sample_aser_data$actual)
+
+glimpse(under_sample_aser_data)
+
+table(under_sample_aser_data$actual) #checking if the factor levels are correct
+
+```
+### Confusion Matrix GLM
+
+```{r}
+confusionMatrix(under_sample_aser_data$actual, under_sample_aser_data$predicted,
+                mode = "everything", #what you want to report in stats
+                positive="1") #positive here is high
+```
+#### Results from Confusion Matrix
+
+The confusion matrix shows that the logistic regression model has an accuracy of 0.60, which means that the model correctly predicts a student exhibiting General Knowledge Score 60% of the time.The precision, or positive predictive value, is 63%, indicating that when the model predicts a student exhibiting General Knowledge Score, it is correct 63% of the time. The F1 score is 61%, which is the harmonic mean of precision and recall reflecting a moderate balance of the model's ability to predict a student exhibiting some general knowledge or no general knowledge. 
+
+The Kappa value is 0.21 which means that there is a moderate agreement between the actual and predicted values. Overall, the model is not highly accurate in predicting the General Knowledge Score of the students based on our predictors.The reason being that the model flagged 170 false positives and 152 false negatives. To balance the classes, I utilized an undersampling technique which might have resulted in some loss of data.
+
+### Mosaic Plot
+
+```{r}
+#put the actual and predicted values into a table
+mosaic_table_lrm <- table(under_sample_aser_data$actual, under_sample_aser_data$predicted)
+mosaic_table_lrm #check on that table
+
+#simple mosaic plot
+mosaicplot(mosaic_table_lrm,
+           main = "Confusion matrix for logistic regression",
+           sub = "Accuracy of prediction",
+           xlab = "Predicted",
+           ylab = "Actual",
+           color = "lightpink",
+           border = "darkgrey")
+
+```
+
+### Experimental Machine Learning
+
+```{r}
+library(caret)
+
+#Using the reduced dataset that already has removed highly correlated variables
+
+aser_child_household_tib_2 <- aser_child_household_tib 
+glimpse(aser_child_household_tib_2)
+
+set.seed(123)
+
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10) #10 fold cross validation
+
+#the 10 fold CV stepwise model for logistic regression with stepwise!
+logreg_cv10 <- train(GeneralKnolwedge ~ .,
+                 data = aser_child_household_tib_2,
+                 method="glmStepAIC", # Step wise AIC (estimator of prediction error) from maas package
+                 direction="backward",
+                 trControl = train.control,
+                 family = "binomial")
+
+logreg_cv10 #kappa and accuracy
+
+summary(logreg_cv10) #estimates of the model. TravelTime is the only insignificant predictor.
+
+
+```
+
+The model shows an accuracy of 74% meaning that the model correctly predicts a student exhibiting General Knowledge Score 74% of the time. The Kappa value is 0.11 which means that there is a poor/slight agreement between the actual and predicted values which means that there is room for improvement by selecting better parameters.
+
+#### Predicted and Actual Values
+
+```{r}
+#get predicted values
+predicted <- unname(logreg_cv10$finalModel$fitted.values) #change from a named number vector
+#add predicted values to tibble
+aser_child_household_tib_2$predicted.probabilities<-predicted
+
+aser_child_household_tib_2 <- aser_child_household_tib_2 %>% 
+  mutate(actual = ifelse(GeneralKnolwedge == "No_GK", 0, 1)) %>% 
+  #assign 0 to .50 and less and 1 to anything else 
+  mutate(predicted = ifelse(predicted.probabilities < .50, 0, 1)) 
+
+#both need to be factors
+aser_child_household_tib_2$predicted <- as.factor(aser_child_household_tib_2$predicted)
+aser_child_household_tib_2$actual <- as.factor(aser_child_household_tib_2$actual)
+
+glimpse(aser_child_household_tib_2)
+table(aser_child_household_tib_2$actual)
+
+confusionMatrix(aser_child_household_tib_2$actual, aser_child_household_tib_2$predicted,
+                mode = "everything", 
+                positive="1") #indicating some general knowledge
+
+```
+
+### Second Mosaic Plot
+
+```{r}
+#put the actual and predicted values into a table
+mosaic_table_caret <- table(aser_child_household_tib_2$actual, aser_child_household_tib_2$predicted)
+mosaic_table_caret #check on that table
+
+#simple mosaic plot
+mosaicplot(mosaic_table_caret,
+           main = "Confusion matrix for logistic regression",
+           sub = "Accuracy of prediction",
+           xlab = "Predicted",
+           ylab = "Actual",
+           color = "lightblue",
+           border = "darkred")
+
+```
+Results from Confusion Matrix show that the model has an accuracy of 74%, which means that the model correctly predicts a student exhibiting General Knowledge 74% of the time. The F1 score is 0.84, which is the harmonic mean of precision and recall reflecting a balance of the model's ability to predict a student exhibiting some general knowledge or no general knowledge. The Kappa value is 0.11 which means that there is a poor to slight agreement between the actual and predicted values. Overall, the model is not highly accurate in predicting the General Knowledge Score of the students based on our predictors. The model is also weak in correctly predicting negative values as suggested by the Negative Predictive value of 0.11. Class imbalance can be observed in the second mosaic plot. 
+
+### Conclusion
+
+The logistic regression model and the experimental machine learning model show that the model is not highly accurate in predicting the General Knowledge Score of the students based on our predictors. Part of the blame can be attributed to the class imbalance in the dataset to understand the predictors of the General Knowledge Score. The loss of data due to both, removal of NAs and undersampling, might have also contributed to the model's poor performance.
+
+The logistic regression model shows that the probability of the student exhibiting general knowledge increases to 63% when their parents exhibit some climate change awareness. This means that parental awareness of climate change can have a positive impact on the overall general knowledge of the students.
+
+On the other hand, the probability of the student exhibiting general knowledge decreases to 44% when their parents report that they are psychologically impacted by climate change. This means that parental psychological impact due to climate change can have a negative impact on the overall general knowledge of the students.
+
+In conclusion, the models can be improved by selecting better parameters and by using other machine learning techniques to address the class imbalances.

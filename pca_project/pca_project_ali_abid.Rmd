@@ -1,0 +1,527 @@
+---
+title: "Exploring the Link Between Household and Climate Change Factors and Educational Achievement in Rural Pakistan: A PCA and Logistic Regression Study"
+author: "Ali Abid"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    number_sections: yes
+---
+
+# Introduction and Situational Context
+
+Despite being the fifth most populous country in the world, Pakistan is only able to spend as much as 1.7 percent of its GDP on education (Abbasi, 2023). The tumultuous domestic political climate, in conjunction with the global geopolitical landscape, has undeniably resulted in a series of macroeconomic crises within the nation. These crises have unfortunately led to widespread inflation, a rise in poverty, and a profound literacy crisis that poses significant challenges for future generations. A sizable children population (around 26 million) remains out of school (Haider, 2024) which can have devastating impact on the opportunities of the country to grow out of these crises.
+
+# Purpose
+
+The purpose of this research project is to understand the the factors that influence students' general knowledge by utilizing principal component analysis (PCA) to reduce the dataset into key components.
+
+The dataset used in this analysis is the ASER 2023 rural dataset which is a household survey conducted in Pakistan to assess the learning levels of children in the country. The dataset contains information on the academic outcomes including whether a student exhibited general knowledge while being surveyed, the said students' household characteristics, and the impact of climate change as reported by their households. The analysis will focus on the factors that contribute to the general knowledge of students in Pakistan and will use logistic regression to predict the outcome in a probabilistic form based on these predictors.
+
+# Data Description
+
+**Predictor Variables**:
+
+-   **HouseholdCounter**: Number of people in the household
+
+-   **EarningMembers**:Number of earning members in the household
+
+-   **TravelTime**:Time taken to travel to school
+
+-   **Car**: Number of cars in the household
+
+-   **MotorCycle**: Number of motorcycles in the household
+
+-   **ClimateChange**: Whether the household has been impacted by climate change and to which severity on a scale of 1-4
+
+-   **MigrantIDP**: Whether the household was categorized as *migrant* due to flood impact (0 - Not a migrant, 1 - Migrant due to flood impact)
+
+-   **FloodImpacted**: Whether the household has been impacted by floods and to which severity on a scale of 1-3
+
+    -   1.Yes, significantly 2. Yes, moderately 3. No, not affected
+
+-   **EarningImpacted**: Whether the household has been impacted by loss of earnings due to climate change and to which severity
+
+    -   1.Less than 10% 2. btw 11%-25% 3. btw 26%-50% 4. More than 50% 5. No affect
+
+-   **PsychologicalImpacted**: Whether the household has been impacted by psychological distress due to climate change and to which severity on a scale of 1-4
+
+    -   1\. Substantially 2. Somewhat affected 3. Affected only a bit 4. Not at all
+
+-   **SchoolingAffected**: Whether the household reports that the student's schooling has been impacted due to climate change and to which severity on a scale of 1-4
+
+    -   1\. Extremely affected 2. Moderately affected 3. Somewhat affected 4. Not at all
+
+**Outcome Variables**:
+
+-   GeneralKnowledge: Whether the student exhibited general knowledge or not while tested by the ASER data collection team.
+
+    -   1\. Yes 0. No
+
+# Research Question
+
+Can student's household characteristics, and climate-change factors affecting the student's household be combined into principal components to identify underlying factors, and how well do these factors predict a student's general knowledge level?
+
+# Analysis
+
+```{r}
+rm(list=ls(all=TRUE))
+```
+
+## Required Libraries
+
+```{r}
+library(tidyverse)
+library(readr)
+library(caret)
+library(psych)
+library(factoextra)
+```
+
+## Load the data
+
+The two distinct datasets are loaded into R. The first dataset contains the child-level data, while the second dataset contains the household-level data. The two datasets are merged on the *HouseholdId* column by first renaming the variable to *HHID* which is unique to both the datasets to create a single dataset for analysis.
+
+```{r}
+# Load the data
+aser_child <- read_csv("ITAASER2023Child.csv")
+aser_household <- read_csv("ITAASER2023Household.csv") %>% 
+  rename(HHID = HouseholdId) # Renaming the HouseholdId column to HHID for merging with the Child Dataset
+```
+
+## Data Wrangling
+
+The two datasets are merged on the HHID column to create a single dataset *aser_child_household_data* for analysis. The variables of interest as discussed in the section of predictor variables and outcome variable are selected and renamed for clarity.
+
+```{r}
+# Merging the two datasets
+aser_child_household_data <- aser_child %>% 
+  left_join(aser_household, by = "HHID")
+  
+aser_child_household_data <- aser_child_household_data %>% 
+  select(
+    # Household Characteristics
+    HouseholdCounter, EarningMembers, Car, MotorCycle,
+    
+    # Time to school
+    TravelTime,
+    
+    # Climate Change Impact
+    ClimateChange, FloodImpacted, EarningImpacted, PsychologicalImpacted, SchoolingAffected, MigrantIDP,
+
+    # Child Characteristics - GeneralKnowledge
+    C27
+  ) %>%
+  rename(
+    
+    # Child Characteristics - GeneralKnowledge - whether the child exhibits GK or not
+    GeneralKnolwedge = C27
+  
+  )
+
+```
+
+## Data Cleaning
+
+The dataset is cleaned by removing rows with missing values and changing column types to numeric for further analysis.
+
+```{r}
+# Removing the rows with missing values
+aser_child_household_tib <- aser_child_household_data %>%
+  na.omit() %>% #get rid of rows with NAs
+  mutate_at(c(1:12),as.numeric) #change all columns to numeric
+  #mutate(GeneralKnolwedge = as.factor(GeneralKnolwedge))  #change GK Score to factor
+  #mutate_at(c(1:12), ~(scale(.) %>% as.vector))
+  #scale all variables so mean is zero and values are standardized to SD from zero
+  #as.vector ensures columns are vectors
+
+library(psych)
+
+psych::describe(aser_child_household_tib) #gives you a lot of descriptives quickly
+
+# There seems to be an outlier value in HouseholdCounter, which needs investigation.
+
+```
+
+The boxplot is used to identify and remove an outlier value in the *HouseholdCounter* variable.
+
+```{r}
+boxplot(aser_child_household_tib$HouseholdCounter, 
+        main = "Boxplot of HouseholdCounter", 
+        xlab = "HouseholdCounter")
+
+# Let's just try to find out which is the outlier value
+
+max(aser_child_household_tib$HouseholdCounter)
+
+# There is an outlier value in HouseholdCounter, which is 5789321. We will remove this row.
+
+aser_child_household_tib <- aser_child_household_tib %>%
+  filter(HouseholdCounter < 100)
+
+# Checking the boxplot again to see if the outlier has been removed
+
+boxplot(aser_child_household_tib$HouseholdCounter, 
+        main = "Boxplot of HouseholdCounter", 
+        xlab = "HouseholdCounter")
+
+```
+
+## STEP 1: Correlations for Strong Multicollinearity
+
+The correlation matrix is used to identify variables with strong multicollinearity (r\>0.9) to ensure that the components accurately represent the variance in the data without redundancy.
+
+```{r}
+# PCA requires the removal of variables with strong multicollinearity (r>0.9) to ensure that the components accurately represent the variance in the data without redundancy.
+
+aser_child_household_tib_excluded <- aser_child_household_tib[, -12] # Excluding the GeneralKnowledge variable as it is the outcome variable
+
+corr_aser_pca <- cor(aser_child_household_tib_excluded)
+
+corr_aser_pca
+
+corrplot::corrplot(corr_aser_pca, method = "shade") #corrplot for visualizing the correlation matrix
+
+# There are no variables with strong multicollinearity (r>0.9) in the dataset.The climate change factors have a correlation of around 0.7 but we are not excluding them.
+
+```
+
+## STEP 2: Scale all the variables
+
+The variables are scaled to ensure that the mean is zero and the values are standardized to a standard deviation of 1. This is done to ensure that all variables are on the same scale for the PCA analysis.
+
+```{r}
+scaled_aser_child_household_tib <- aser_child_household_tib_excluded %>%
+  mutate(across(where(is.numeric), ~ scale(.) %>% as.vector)) #scale all variables
+
+glimpse(scaled_aser_child_household_tib)
+
+psych::describe(scaled_aser_child_household_tib) #make sure all means are 0, and sd is 1. This is gives us a lot of descriptives quickly
+```
+
+## STEP 3: Visualizing PCA
+
+The PCA is visualized to understand the underlying data.
+
+```{r}
+# This is just to understand the underlying data. The correlation between a variable and a principal component (PC) is used as the coordinates of the variable on the PC.
+
+library(factoextra) #extract and visualize the output of multivariate data analyses, including 'PCA'
+library(FactoMineR) #multivariate exploratory data analysis
+
+aser_pca_eigen <- PCA(scaled_aser_child_household_tib, scale.unit = TRUE, graph = FALSE)
+aser_pca_eigen$eig #eigenvalues
+```
+
+Kaiser rule suggests that we should keep components with eigenvalues greater than 1. Hence, it shows that we can keep **components 1, 2 and 3.**
+
+```{r}
+
+#line below runs a simple PCA with a component for each variable. 
+
+viz_pca <- prcomp(scaled_aser_child_household_tib, center = TRUE,scale. = TRUE)
+
+#Graph of variables. Positive correlated variables point to the same side of the plot. Negative correlated variables point to opposite sides of the graph.
+
+fviz_pca_var(viz_pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE #Avoid overlapping text if possible 
+             )
+
+```
+
+Through visualization, it seems that the following are loading together: **Dimension 1** (29.9%) and **Dimension 2** (12.1%)
+
+1.  **Climate Change Factors:** PsychologicalImpacted, SchoolingAffected, EarningImpacted, FloodImpacted, ClimateChange
+2.  **Household Factors:** MigrantIDP, HouseholdCounter, EarningMembers, Car, MotorCycle, TravelTime
+
+## STEP 4: Bartlett's test
+
+Bartlett's test checks if the data is suitable for PCA by determining whether the variables are related enough (correlated) to find meaningful patterns.
+
+```{r}
+psych::cortest.bartlett(scaled_aser_child_household_tib, 2367) #there are 2367 observations
+```
+
+The p-value is very close to zero (it shows 0 in the result), so we reject the null hypothesis that the correlation matrix is an identity matrix, hence, PCA is justified because it will capture meaningful variance from the data.
+
+## STEP 5: KMO Test
+
+The Kaiser-Meyer-Olkin (KMO) test tells you whether the data is good enough for PCA or factor analysis by checking how well the variables are grouped together. A KMO value of 0.5 or higher is considered suitable for PCA.
+
+```{r}
+psych::KMO(scaled_aser_child_household_tib)
+
+#all data above .50 and overall MSA is strong (0.81) except for EarningMembers which is 0.36
+
+# For reference: KMO > 0.8: Great for PCA! Variables are strongly related. KMO 0.7–0.8: Good, you can proceed. KMO 0.6–0.7: Okay, but be cautious. KMO < 0.6: Not ideal—your data might not be suitable for PCA.
+
+# We are going to remove EarningMembers because it has a KMO of 0.36, which is below the suitable threshold of 0.5.
+
+scaled_aser_child_household_tib <- scaled_aser_child_household_tib %>%
+  select(-EarningMembers) #remove EarningMembers
+
+KMO(scaled_aser_child_household_tib) #re-run KMO to make sure it is above .50, it is, hence, we can move on
+
+```
+
+Through the KMO test, we found that the variable *EarningMembers* is not suitable for PCA as it has a KMO value of 0.36, which is below the suitable threshold of 0.5. Hence, we removed it from the dataset.
+
+## STEP 6: Baseline PCA to select number of components
+
+The baseline PCA is run to determine the number of components to keep in the final PCA analysis.
+
+```{r}
+#This is our initial PCA to see how many components we should keep.
+pca_base <- principal(scaled_aser_child_household_tib, rotate = "none") #baseline PCA
+
+pca_base
+
+plot(pca_base$values, type = "b", xlab = "Principal Component", ylab = "Eigenvalue", main = "Scree Plot") #type b means include both lines and points
+
+#the plot shows the variance explained by 2-3 linear components. We will keep 3 components for now.
+```
+
+The elbow in the scree plot suggests that we should keep **3 components** for the final PCA analysis. This is because the variance explained by the components starts to level off after the third component. In other words, the elbow is bending sharply after the third component, indicating that the first three components capture most of the variance in the data.
+
+## STEP 7: Check that residuals are normally distributed
+
+The residuals are checked to ensure that they are normally distributed.
+
+```{r}
+pca_resid <- principal(scaled_aser_child_household_tib, nfactors = 3 , rotate = "none")
+pca_resid #results. 
+
+#require correlation matrix for final data
+corMatrix<-cor(scaled_aser_child_household_tib)
+
+#next,create an object from the correlation matrix and the pca loading. Call it residuals. It will contain the factor residuals
+residuals<-factor.residuals(corMatrix, pca_resid$loadings)
+
+#call a histogram to check residuals
+hist(residuals) 
+```
+
+The residuals are somewhat normally distributed but exhibit positive skewness.
+
+## STEP 8: Informed PCA with specific number of components
+
+The final PCA is run with the specific number of components (3) to identify the underlying factors in the data.
+
+```{r}
+# rotation. Since factors should be related that's our assumption, use oblique technique (promax).
+pca_final <- principal(scaled_aser_child_household_tib, nfactors = 3, rotate = "promax")
+pca_final #results. 
+
+#RMSR is 0.11 and fit measure is 0.85. This is a good fit.
+
+print.psych(pca_final, cut = 0.3, sort = TRUE) #print the results
+```
+
+```{r}
+plot(pca_final)
+#component 1 is black
+#component 2 is red
+#component 3 is blue
+#component 4 is grey in case of four components
+fa.diagram(pca_final)
+```
+
+### Components
+
+As the diagram shows, the components identified are as follows:
+
+-   Component 1: Climate Change Factors (PsychologicalImpacted, SchoolingAffected, EarningImpacted, FloodImpacted, ClimateChange)
+-   Component 2: Household Vehicles (Car, MotorCycle)
+-   Component 3: Displacement Factors (MigrantIDP, HouseholdCounter, TravelTime)
+
+## STEP 9: Collect factor scores
+
+The factor scores are collected for each text on each factor. These scores provide a way to understand how strongly each observation is associated with the patterns captured by the factors. The factor scores are then combined with the original dataset for further analysis. Similarly, we rename the columns for clarity.
+
+```{r}
+pca_final_scores <- as.data.frame(pca_final$scores) #scores for each text on each factor.
+head(pca_final_scores)
+
+#rename columns
+pca_final_scores <- pca_final_scores %>% 
+  rename(climate_change_factors = RC1, household_vehicles = RC2, people_time = RC3)
+
+#combine this dataframe with earlier dataframe
+
+glimpse(aser_child_household_tib)
+
+final_aser_child_household_tib <- cbind(aser_child_household_tib, pca_final_scores)
+
+glimpse(final_aser_child_household_tib)
+```
+
+## Step 10: Balancing the classes
+
+The classes are balanced to ensure that the model is not biased towards the majority class. The classes are balanced by randomly sampling the data to ensure that the number of observations in each class is the same.
+
+```{r}
+# First, checking, whether classes are balanced at the outcome level
+
+table(final_aser_child_household_tib$GeneralKnolwedge) #shows the distribution of the dependent variable (General Knowledge Score)
+#this gives us sample sizes. 
+#IMPORTANTLY, tells us the baseline class 
+#Some_GK = 1. No_GK = 0. In our data, we have 1192 observations of No_GK and 1175 observations of Some_GK. Hence, the baseline class should be Some_GK because of the higher number of observations. We need to balance the factors as well.
+
+#balance the factors
+set.seed(123)
+final_aser_child_household_tib_balanced <- final_aser_child_household_tib %>%
+  group_by(GeneralKnolwedge) %>%
+  sample_n(1175) %>%
+  ungroup()
+
+table(final_aser_child_household_tib_balanced$GeneralKnolwedge) #shows the distribution of the dependent variable (General Knowledge Score) after balancing the factors
+
+glimpse(final_aser_child_household_tib_balanced)
+
+final_aser_child_household_tib_balanced <- final_aser_child_household_tib_balanced %>%
+  mutate(GeneralKnolwedge = as.factor(GeneralKnolwedge)) %>% #change GK Score to factor
+  select(GeneralKnolwedge, climate_change_factors, household_vehicles, people_time) #remove other variables
+
+levels(final_aser_child_household_tib_balanced$GeneralKnolwedge) #check levels of the factors of GK
+table(final_aser_child_household_tib_balanced$GeneralKnolwedge) #check the distribution of the factors of GK
+
+glimpse(final_aser_child_household_tib_balanced) #check the final dataset
+
+```
+
+## Step 11: Correlation Matrix for the final dataset
+
+The correlation matrix is used to check for multicollinearity between the components. The Variance Inflation Factor (VIF) is used to check for multicollinearity between the components. A VIF value greater than 5 indicates multicollinearity.
+
+```{r}
+final_cor_aser <- final_aser_child_household_tib_balanced[,2:4]  # Exclude outcome variable, GeneralKnowledge, for corrlation 
+corr_aser_final <- cor(final_cor_aser) 
+corr_aser_final #all r<0.7, no munlticollinearity, ready for next step
+
+car::vif(lm(climate_change_factors ~ household_vehicles + people_time, data = final_aser_child_household_tib_balanced)) # moderate correlation >1
+
+#overall low correlations between the components but no multicollinearity issue
+```
+
+The correlations between the factors are low, with no multicollinearity issues r\<0.7. The VIF value is less than 5, indicating that there is no multicollinearity between the components.
+
+## Step 12: Cross-validated logistic regression
+
+```{r eval=TRUE, echo=TRUE, results='hide'}
+library(caret)
+set.seed(123)
+
+# Set up 10-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10, verbose = FALSE)
+# method = cross validation, number = ten times (10 fold cross-validation)
+
+# Logistic regression with stepwise selection
+lr_cv10 <- train(GeneralKnolwedge ~ ., 
+                 data = final_aser_child_household_tib_balanced, 
+                 method = "glmStepAIC",
+                 direction = "backward", 
+                 trControl = train.control,
+                 family = "binomial",
+                 verbose = FALSE
+)
+```
+
+```{r}
+# Cross-validated model results
+lr_cv10 # kappa is 0.16 and accuracy is 0.58
+#print(lr_cv10$finalModel) # Final model)
+summary(lr_cv10$finalModel) # Coefficients and model summary
+```
+
+The stepwise logistic regression model removed the two components, climate change factors, and the displacement factors, leaving only the household vehicles component as a significant predictor of general knowledge.
+
+## Step 13: Confusion Matrix
+
+```{r}
+
+#get predicted values
+predicted <- unname(lr_cv10$finalModel$fitted.values) #change from a named number vector
+#print(predicted)
+
+#add predicted values to tibble
+
+final_aser_child_household_tib_balanced$predicted.probabilities <- predicted
+
+
+final_aser_child_household_tib_balanced <- final_aser_child_household_tib_balanced %>% 
+  mutate(actual = ifelse(GeneralKnolwedge == "1", 1, 0)) %>% 
+  #assign 0 to .50 and less and 1 to anything else 
+  mutate(predicted = ifelse(predicted.probabilities > 0.5, 1, 0)) #criteria is arbitary, but >0.5 means that the child is exhibiting general knowledge
+
+
+#both need to be factors
+final_aser_child_household_tib_balanced$predicted <- as.factor(final_aser_child_household_tib_balanced$predicted)
+final_aser_child_household_tib_balanced$actual <- as.factor(final_aser_child_household_tib_balanced$actual)
+
+glimpse(final_aser_child_household_tib_balanced)
+table(final_aser_child_household_tib_balanced$actual) #what are final numbers
+
+
+# create confusion matrix using CARET
+confusionMatrix(final_aser_child_household_tib_balanced$actual, final_aser_child_household_tib_balanced$predicted,
+                mode = "everything", #what you want to report in stats
+                positive="1") #positive here is some general knowledge
+
+
+```
+
+The low Kappa value (0.16) suggests that there is only slight agreement between predicted and actual values, adjusted for chance. Similarly, the low accuracy (0.58) suggests that the model is not highly accurate in predicting whether a student exhibits general knowledge or not.
+
+## Step 14: Final Model Interpretation
+
+```{r}
+final_aser_model <- lr_cv10$finalModel
+summary(final_aser_model) # household_vehicles is the only significant variable
+```
+
+household_vehicles is the only significant variable. We are going to compute probabilities to understand the effect of household vehicles on the likelihood of a student exhibiting general knowledge.
+
+```{r}
+exp(final_aser_model$coefficients)
+
+#create function for computing probabilities
+probabilities <- function(coef) {
+  odds <- exp(coef)
+  prob <- odds / (1 + odds)
+  return(prob)
+}
+
+#compute probabilities
+probabilities(final_aser_model$coefficients)
+```
+
+### Interpretation:
+
+The probability of having general knowledge for students from households with no vehicles is approximately 50%. For each additional vehicle in a household, the probability of student possessing general knowledge increases to about 62%. This suggests that students whose households have one or more vehicles are associated with a higher likelihood of exhibiting general knowledge compared to those students who come from households without any vehicles.
+
+## Step 15: Mosaic Plot
+
+```{r}
+#put the actual and predicted values into a table
+mosaic_table <- table(final_aser_child_household_tib_balanced$actual, final_aser_child_household_tib_balanced$predicted)
+mosaic_table #check on that table
+
+#simple mosaic plot
+mosaicplot(mosaic_table,
+           main = "Confusion matrix for logistic regression",
+           sub = "Accuracy of prediction",
+           xlab = "Predicted",
+           ylab = "Actual",
+           color = "lightpink",
+           border = "darkblue")
+```
+
+# Conclusion
+
+The PCA analysis identified three components in the data: climate change factors, household vehicles, and displacement factors. The logistic regression model showed that only the household vehicles component was a significant predictor of general knowledge. The model had a low accuracy of 0.58 and a Kappa value of 0.16, indicating slight agreement between predicted and actual values. The probability of a student exhibiting general knowledge increased from 50% to 62% for each additional vehicle in the household. The mosaic plot visualizes the confusion matrix for the logistic regression model.
+
+Since the household vehicles was a significant factor in determining general knowledge, it means that there is a potential association between access to vehicles and educational outcomes reflecting the impact of socioeconomic factors on a student's educational outcome.

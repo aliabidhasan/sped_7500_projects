@@ -1,0 +1,230 @@
+---
+title: "machine_learning_project"
+author: "Ali Abid"
+date: "2024-11-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Data Wrangling
+
+```{r}
+# Load the libraries
+library(tidyverse)
+library(readr)
+library(caret)
+library(psych)
+```
+
+```{r}
+# Load the data
+aser_child <- read_csv("ITAASER2023Child.csv")
+aser_household <- read_csv("ITAASER2023Household.csv") %>% 
+  rename(HHID = HouseholdId) # Renaming the HouseholdId column to HHID for merging with the Child Dataset
+```
+
+```{r}
+# Merging the two datasets
+aser_child_household_data <- aser_child %>% 
+  left_join(aser_household, by = "HHID")
+```
+
+
+```{r}
+# --- 1. Selecting Relevant Variables from Household-Level, and Child-Level Observations---
+aser_child_household_data <- aser_child_household_data %>% 
+  select(
+    # Dataset Identifiers
+    RNAME,
+    
+    # Household Characteristics
+    HouseholdCounter, EarningMembers, Car, MotorCycle, IsHouseOwned, IsElectricityConnectionAvailable, IsComputerAvailable, IsInternetAvailable, IsToiletAvailable,
+    
+    # Time to school
+    TravelTime,
+    
+    # Climate Change Impact
+    ClimateChange, FloodImpacted, EarningImpacted, PsychologicalImpacted, SchoolingAffected,
+
+    # Child Characteristics - EducationalStatus, Grades, LocalLangReadingLevel, ArithmeticLevel, EnglishReadingLevel
+    C15, C19, C20, C27
+  ) %>%
+  rename(
+    
+    # Child Characteristics - EducationalStatus, Grades, InstitutionType, LocalLangReadingLevel, ArithmeticLevel, EnglishReadingLevel
+    LocalLangReadingLevel = C15, ArithmeticLevel = C19, EnglishReadingLevel = C20, GeneralKnolwedge = C27
+  
+  )
+```
+
+## Data Cleaning
+```{r}
+# --- 2. Data Cleaning ---
+# Removing the rows with missing values
+aser_child_household_tib <- aser_child_household_data %>%
+  select(-RNAME) %>% #remove RNAME
+  na.omit() #get rid of rows with NAs
+
+psych::describe(aser_child_household_tib) #gives you a lot of descriptives quickly
+
+str(aser_child_household_tib) #check the structure of the data
+
+
+```
+
+## Correlation Matrix
+
+```{r}
+# --- 3. Correlation Matrix ---
+corr_matrix_one <- cor(aser_child_household_tib %>% 
+                         dplyr::select(-GeneralKnolwedge, -IsInternetAvailable)) #removing GeneralKnolwedge and IsInternetAvailable because they will be highly correlated with other variables such as IsComputerAvailable and the other reading levels respectively 
+
+corrplot::corrplot(corr_matrix_one, method = "number") #results are not very clear as we have a huge list of variables, trying another approach
+
+cor(corr_matrix_one) #difficult to read and interpret so many variables all at once, hence, trying to sort the variables by correlation which meet certain threshold of highly correlated i.e. 0.7
+
+cor_threshold <- 0.7 #defining the threshold
+
+high_correlation_one <- which(abs(corr_matrix_one) > cor_threshold, arr.ind = TRUE)
+
+print(high_correlation_one) #printing the highly correlated variables
+
+# Results through this method show that PsychologicalImpacted and SchoolingAffected are highly correlated, hence, we can remove one of them
+
+```
+
+## Data Preprocessing
+
+```{r}
+# --- 4. Data Preprocessing ---
+# Removing the highly correlated variables
+aser_child_household_tib_final <- aser_child_household_tib %>% 
+  select(-PsychologicalImpacted, -GeneralKnolwedge, -IsInternetAvailable) #removing highly correlated variables
+
+# Checking the structure of the data
+str(aser_child_household_tib_final)
+
+# Running Regression
+lm_model <- lm(ArithmeticLevel ~ ., data = aser_child_household_tib_final)
+
+# Checking the summary of the model
+summary(lm_model)
+
+# Checking the VIF of the model
+car::vif(lm_model)
+
+# Checking the residuals of the model
+plot(lm_model)
+
+# Graph for Actual vs Fitted Values
+
+actual <- aser_child_household_tib_final$ArithmeticLevel
+fitted <- unname(lm_model$fitted.values) #would have been a named number vector if unname not used
+#grab up the fitted values from the regression model
+
+aser_fitted <- cbind.data.frame(actual, fitted) #cbind binds the two vectors into a dataframe
+
+
+ggplot(aser_fitted, aes(x = actual, y = fitted)) +
+  geom_point() +
+  xlab("Actual value") +
+  ylab("Predicted value") +
+  ggtitle("Scatterplot for actual and fitted values") +
+  geom_abline(intercept = 1,
+              slope = 1,
+              color = "darkblue",
+              linewidth = 1)
+
+#Results: the scatterplot suggests a strong positive linear relationship between actual and fitted values, with low variability and a good model fit.
+
+```
+
+## Machine Learning Through CARET
+
+```{r}
+# Splitting the data into training and testing sets
+
+set.seed(123) #initialize a pseudorandom number generator so that train and test set will be the same each time you call functions
+
+#create new variable in tibble for division into training and test sets
+
+aser_child_household_tib_final <- aser_child_household_tib_final %>% 
+  mutate(id = row_number()) #create a new variable id which is the row number
+
+#70% of data as training set 
+train_set <- aser_child_household_tib_final %>% 
+  sample_frac(0.70) #which to select (the 70%)
+
+#30% of data test set 
+test_set  <- anti_join(aser_child_household_tib_final, train_set, by = 'id') 
+#anti_join, basically says grab what is in aser_final_tib that is not in train_set
+
+#remove unnecessary variables 
+train_set <- train_set %>% 
+  dplyr::select(-id)
+
+test_set <- test_set %>% 
+  dplyr::select(-id)
+
+# run model from above on the train set
+
+# Train linear regression model with stepwise selection
+
+lm_caret_model <- train(ArithmeticLevel ~ ., 
+                  data = train_set, #the data
+                  method = "leapSeq",
+                  tuneGrid = data.frame(nvmax = 1:16)) #linear regression
+
+# Checking the summary of the model
+lm_caret_model
+
+
+
+
+# Checking the dimensions of the training and testing sets
+
+dim(train_data)
+
+dim(test_data)
+
+# Running the model
+
+lm_model_caret <- train(ArithmeticLevel ~ ., data = train_data, method = "lm")
+
+# Checking the summary of the model
+
+summary(lm_model_caret)
+
+# Checking the VIF of the model
+
+car::vif(lm_model_caret)
+
+# Checking the residuals of the model
+
+plot(lm_model_caret)
+
+# Graph for Actual vs Fitted Values
+
+actual_caret <- test_data$ArithmeticLevel
+
+fitted_caret <- unname(predict(lm_model_caret, test_data))
+
+aser_fitted_caret <- cbind.data.frame(actual_caret, fitted_caret)
+
+ggplot(aser_fitted_caret, aes(x = actual_caret, y = fitted_caret)) +
+  geom_point() +
+  xlab("Actual value") +
+  ylab("Predicted value") +
+  ggtitle("Scatterplot for actual and fitted values") +
+  geom_abline(intercept = 1,
+              slope = 1,
+              color = "darkblue",
+              linewidth = 1)
+
+
+```
+

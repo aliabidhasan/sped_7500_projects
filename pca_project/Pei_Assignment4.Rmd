@@ -1,0 +1,406 @@
+---
+title: "Pei_Reducation"
+author: "Vanessa"
+date: "2024-11-19"
+output: html_document
+---
+
+# 1. Introduction
+Title IX of the Education Amendments of 1972 mandates gender equity in federally funded educational institutions by requiring equal opportunities for male and female students in sports participation, equitable athletic scholarship distribution, and equal treatment in related benefits (National Women’s Law Center, 2022). Despite this legal framework, significant gender disparities persist in collegiate athletics. For example, while women constitute more than half of the student body at NCAA schools, they receive only 44% of athletic participation opportunities. Additionally, at Division I-FBS schools, women receive a disproportionately low share of athletic resources: 18% of total athletic spending, 29% of recruiting funds, and 41% of scholarship dollars. On average, 2.5 times more is spent on men’s sports than on women’s sports (National Women’s Law Center, 2022).
+
+The purpose of this data analysis is to explore the factors influencing the gap between male and female athletic student aid using logistic regression. Specifically, this study will examine how institutional financial characteristics and student demographics affect the likelihood of equitable distribution of athletic aid. Variables such as total recruiting expenses, total participation numbers for men’s and women’s teams, public versus private institution sector, the total number of head coaches, SAT average scores, the predominant undergraduate degree awarded, overall admission rates, and the average cost of attendance will be analyzed. By utilizing data from the 2022-2023 academic year, this analysis will focus on gender equity in collegiate sports, offering insights from both institutional and student perspectives. Additionally, the analysis will investigate the role of public versus private institutional contexts in shaping these inequities.
+
+This research aims to identify key predictors of gender disparities in athletic aid, providing actionable insights to address inequities and further the objectives of Title IX.
+
+# 2. Research Questions 
+
+How can we predict whether a college provides higher athletic student aid to male or female athletes based on school type, financial resources, team size, and student demographics?
+
+# 3. Data 
+The analysis relies on two primary datasets: the 2023 Equity in Athletics Survey and the College Scorecard database, both sourced from the U.S. Department of Education.
+
+The first dataset, collected through the 2023 Equity in Athletics Survey by the Office of Postsecondary Education, is mandated by the Equity in Athletics Disclosure Act (EADA). This act requires all co-educational, Title IV-funded institutions with intercollegiate athletics programs to submit annual data on athletics equity through a web-based tool. This dataset, designed for public access and inquiries into equity in athletics, is hosted on the OPE Equity in Athletics Disclosure Website and includes data from 2,040 institutions.
+
+The second dataset, College Scorecard, is part of a Department of Education initiative to increase transparency and provide consumer information on higher education institutions and fields of study. This dataset includes information on postsecondary education costs, graduation rates, student loan debt, and post-college earnings, covering 6,484 institutions, including main and branch campuses.
+
+**Ourcome Variable**
+STUDENTAID_MEN and STUDENTAID_WOMEN, sourced from the 2023 Equity in Athletics Survey database, are the outcome variables. In the analysis, I will compare each institution: if it provides higher student aid to males, it will be labeled as HigherAthleticAid_Men; if it provides higher student aid to females, it will be labeled as HigherAthleticAid_Women
+
+**Predictor Variable**
+I selected a range of outcome variables to explore potential influences on athletic student aid distribution, sourced from both datasets:
+
+* UNITID: Unique identifier for institutions.
+
+From the Equity in Athletics Survey:
+
+* TOT_REVENUE_ALL_NOTALLOC: Total Recruiting Expenses for Men’s and Women’s Teams.
+
+* IL_SUM_PARTIC_MEN, IL_SUM_PARTIC_WOMEN: Total Number of Participants for Men’s and Women’s Teams.
+
+* IL_SUM_TOTAL_HDCOACH: Total Number of Head Coaches for Men’s and Women’s Teams.
+
+* sector_cd: Institution Sector, categorized as public (four-year: 594, two-year: 567) or private (non-profit four-year: 843, for-profit four-year: 23, non-profit two-year: 12).
+
+* STUDENTAID_MEN, STUDENTAID_WOMEN: Athletic Student Aid for both men’s and women’s teams.
+
+* RECRUITEXP_MEN, RECRUITEXP_WOMEN: Recruiting Expenses for men’s and women’s teams.
+
+* HDCOACH_SALARY_MEN, HDCOACH_SALARY_WOMEN: Annual salary per head coach for men’s and women’s teams.
+
+* ASCOACH_SALARY_MEN, ASCOACH_SALARY_WOMEN: Annual salary for assistant coaches for men’s and women’s teams.
+
+* NUM_ASCOACH_MEN, NUM_ASCOACH_WOMEN: Number of assistant coaches for men’s and women’s teams.
+
+* IL_PARTIC_MEN, IL_PARTIC_WOMEN: Total Number of Participants for men’s and women’s teams.
+
+* IL_OPEXPPERPART_MEN, IL_OPEXPPERPART_WOMEN: Total Expenses Per Participant for men’s and women’s teams.
+
+* IL_OPEXPPERTEAM_MEN, IL_OPEXPPERTEAM_WOMEN: Total Expenses Per Team for men’s and women’s teams.
+
+* IL_MEN_TOTAL_HEADCOACH, IL_WOMEN_TOTAL_HDCOACH: Total Number of Head Coaches for men’s and women’s teams.
+
+* IL_REV_MEN, IL_REV_WOMEN: Total Revenues Per Team for men’s and women’s teams.
+
+From the College Scorecard:
+
+* COSTT4_A: Average Cost of Attendance (academic year institutions).
+
+* SATVR25, SATVR75: 25th and 75th percentile SAT Evidence-Based Reading and Writing scores.
+
+* SATMT25, SATMT75: 25th and 75th percentile SAT Math scores.
+
+* ACTCM25, ACTCM75: 25th and 75th percentile ACT Composite scores.
+
+* ACTEN25, ACTEN75: 25th and 75th percentile ACT English scores.
+
+* ACTMT25, ACTMT75: 25th and 75th percentile ACT Math scores.
+
+* ADM_RATE: Admission rate (percentage of applicants admitted).
+
+The variable types include the nominal variable: Institution Sector (sector_cd), while all other variables are continuou
+
+```{r}
+library(tidyverse)
+library(dbplyr)
+library(readxl)
+```
+
+# 4. Data Wrangling
+
+Call in the Equity in Athletics Survey dataset, and selected relvent variable for analysis. The institution sector was grouped to compare public(0) and private(1) colleges using variale sector type.
+```{r}
+sport_df <- read_xlsx("EADA_2023.xlsx") %>% #read in the Equity in Athletics Survey dataset
+  rename(UNITID = unitid) %>% #rename unitid to UNITID, preparing for merge with College Scorecard
+  select(UNITID, sector_cd, STUDENTAID_MEN, STUDENTAID_WOMEN, IL_SUM_PARTIC_MEN,  IL_SUM_PARTIC_WOMEN, RECRUITEXP_MEN, RECRUITEXP_WOMEN, HDCOACH_SALARY_MEN, HDCOACH_SALARY_WOMEN, IL_MEN_TOTAL_HEADCOACH, IL_WOMEN_TOTAL_HDCOACH, NUM_ASCOACH_MEN, NUM_ASCOACH_WOMEN, IL_PARTIC_MEN, IL_PARTIC_WOMEN, IL_OPEXPPERPART_MEN, IL_OPEXPPERPART_WOMEN) %>% #select relevant columns
+  mutate(
+    sector_type = case_when(
+      sector_cd %in% c(1, 4) ~ 0,   # sector_cd 1 and 4 are public college
+      sector_cd %in% c(2, 3, 5) ~  1)) %>% # sector_cd 2,3,5 are private college 
+  select(-sector_cd) 
+
+#glimpse(sport_df)
+```
+
+Call in the College Scorecard dataset, and selected relvent variable for analysis. 
+```{r}
+score_df <- read_csv("MERGED2022_23_PP.csv") %>% #read in the the College Scorecard dataset
+  select (UNITID, SATVR25, SATVR75, SATMT25, SATMT75, ACTCM25, ACTCM75, ACTEN25, ACTEN75, ACTMT25, ACTMT75, ADM_RATE, COSTT4_A) #select relevant columns
+
+#glimpse(score_df)
+```
+
+To prepare a single dataset for analysis, the tibbles from the Equity in Athletics Survey and the College Scorecard were merged using the common identifier UNITID, which is consistent across both datasets. This ensures that each institution is correctly matched based on its unique identifier. The resulting dataset combines relevant variables from both sources, creating a comprehensive dataset for further analysis.
+```{r}
+sport_score_df <- sport_df %>%
+  left_join(score_df, by = "UNITID") %>% #merge the two databases
+  drop_na() %>% #drop rows with NA values 
+  select(-STUDENTAID_MEN, -STUDENTAID_WOMEN) #unselect the outcome variables 
+```
+
+# 5. Data Analysis
+#### STEP 1: Correlations for Strong Multicollinearity
+```{r}
+# PCA requires the removal of variables with strong multicollinearity (r>0.9) to ensure that the components accurately represent the variance in the data without redundancy.
+
+glimpse(sport_score_df)
+
+sport_score_tib <- sport_score_df[,2:28] #UNITID is not needed for analysis, so it is removed for correlation analysis
+
+corr_sport_score_tib <- cor(sport_score_tib)
+
+corr_sport_score_tib #Variables with r>0.9 removed for PCA: RECRUITEXP_WOMEN, HDCOACH_SALARY_WOMEN, IL_PARTIC_MEN, IL_PARTIC_WOMEN, IL_OPEXPPERPART_WOMEN, SATVR25, SATVR75, ACTEN25, ACTEN75.
+```
+
+Remove variables with strong multicollinearity (r>0.9)
+```{r}
+score_sport_tib <- sport_score_tib %>%
+    select(-c(RECRUITEXP_WOMEN, HDCOACH_SALARY_WOMEN, IL_PARTIC_MEN, IL_PARTIC_WOMEN, IL_OPEXPPERPART_WOMEN, SATVR25, SATVR75, ACTEN25, ACTEN75))
+
+glimpse(score_sport_tib)
+```
+
+
+#### STEP 2: Scale all the variables
+```{r}
+library(psych)
+
+scaled_score_sport <- score_sport_tib %>% 
+  mutate_at(c(1:18), ~(scale(.) %>% as.vector)) #scale all 18 variables
+
+glimpse(scaled_score_sport)
+
+psych::describe(scaled_score_sport) #make sure all means are 0, and sd is 1. This is gives us a lot of descriptives quickly
+```
+
+##### STEP 3: Visualizing PCA
+```{r}
+# This is just to understand the underlying data. The correlation between a variable and a principal component (PC) is used as the coordinates of the variable on the PC.
+
+library(factoextra) #extract and visualize the output of multivariate data analyses, including 'PCA'
+
+#line below runs a simple PCA with a component for each variable. 
+#the most variance will be explained in component 1 and 2
+viz_pca <- prcomp(scaled_score_sport, center = TRUE,scale. = TRUE)
+
+
+#Graph of variables. Positive correlated variables point to the same side of the plot. Negative correlated variables point to opposite sides of the graph.
+
+fviz_pca_var(viz_pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE #Avoid overlapping text if possible 
+             )
+
+# Through visualization, it seems that the following are loading together:
+# 1. College sport team expenses  
+# 2. SAT and ACT scores
+# 3. Number of coachs 
+```
+
+#### STEP 4: Bartlett's test
+```{r}
+cortest.bartlett(scaled_score_sport, 773) #there are 773 observations
+
+# p value below .05, so it is not an identity matrix
+```
+#### STEP 5: KMO
+```{r}
+KMO(scaled_score_sport)
+#all data above .50 and overall MSA is strong
+```
+#### STEP 6: Baseline PCA to select number of components
+```{r}
+pca_base <- principal(scaled_score_sport, nfactors = 18, rotate = "none")
+#there are 18 variable
+
+plot(pca_base$values, type = "b")
+#the plot shows the variance explained by 4 linear components.
+```
+#### STEP 7: Check that residuals are normally distributed
+```{r}
+pca_resid <- principal(scaled_score_sport, nfactors = 4 , rotate = "none")
+pca_resid #results. 
+
+#require correlation matrix for final data
+corMatrix<-cor(scaled_score_sport)
+
+#next,create an object from the correlation matrix and the pca loading. Call it residuals. It will contain the factor residuals
+residuals<-factor.residuals(corMatrix, pca_resid$loadings)
+
+#call a histogram to check residuals
+hist(residuals) # The residuals are normally distributed but exhibit left skewness.
+```
+
+#### STEP 8: Informed PCA with specific number of components
+```{r}
+# rotation. Since factors should be related, use oblique technique (promax).
+pca_final <- principal(scaled_score_sport, nfactors = 4, rotate = "promax")
+pca_final #results. 
+
+print.psych(pca_final, cut = 0.3, sort = TRUE)
+```
+
+
+```{r}
+plot(pca_final)
+#component 1 is black
+#component 3 is blue
+#component 2 is red
+#component 4 is grey
+fa.diagram(pca_final)
+```
+
+Component 1: entrance_exam_scores: ACT and SAT scores
+
+Component 2: numbers_of_coaches_and_participants: the number of head coaches for men's and women's teams, the number of assistant coaches for men's and women's teams, and the total number of participants in men's and women's teams
+
+Component 3: coach salary costs for men's teams, recruitment expenditure for men's teams, and total expenses per participant for men's teams
+
+Component 4: college_type_admission_rate: whether the college is public or private, and the average Cost of Attendance for the academic year
+
+
+#### STEP 9: Collect factor scores
+```{r}
+pca_final_scores <- as.data.frame(pca_final$scores) #scores for each text on each factor.
+head(pca_final_scores)
+
+#rename columns
+pca_final_scores <- pca_final_scores %>% 
+  rename(entrance_exam_scores = RC1, college_sport_expenditure = RC2, numbers_of_coaches_and_participants = RC3, college_type_admission_rate = RC4)
+
+#combine this dataframe with earlier dataframe (sport_score_df, with UNITID)
+
+glimpse(sport_score_df)
+
+final_score_sport_df <- cbind(glimpse(sport_score_df), pca_final_scores)
+
+glimpse(final_score_sport_df)
+```
+
+#### Step 10: Logistic Regreesion 
+```{r}
+# Rename the outcome variable to HigherAthleticAid, indicating whether the school provides higher athletic student aid to men or women, and convert it to a factor.
+
+sport_2 <- read_xlsx("EADA_2023.xlsx") %>% #read in the data
+  rename(UNITID = unitid) %>% #rename unitid to UNITID, preparing for merge with College Scorecard
+   mutate(HigherAthleticAid = ifelse(STUDENTAID_MEN > STUDENTAID_WOMEN, "HigherAthleticAid_Men", "HigherAthleticAid_Women"), #"If the school provides higher athletic aid to men, name it HigherAthleticAid_Men. If the school provides higher athletic aid to women, name it HigherAthleticAid_Women.
+         HigherAthleticAid = as.factor(HigherAthleticAid)) %>% #convert it to a factor
+  select(UNITID, HigherAthleticAid) #select relevant columns
+
+final_score_sport_df <- final_score_sport_df %>%
+  left_join(sport_2, by = "UNITID") %>% #merge the two datasets using UNITID 
+  select(HigherAthleticAid, entrance_exam_scores, college_sport_expenditure, numbers_of_coaches_and_participants, college_type_admission_rate) #select relevant columns
+
+glimpse(final_score_sport_df)
+```
+
+#### Step 11: Balanced the outcome variable groups
+```{r}
+# HigherAthleticAid_Men is less than HigherAthleticAid_Women. We need to balance the outcome variable to avoid bias in the model.
+
+set.seed(123)
+
+HigherAthleticAid_Women <- filter(final_score_sport_df, HigherAthleticAid == "HigherAthleticAid_Women") 
+HigherAthleticAid_Men <- filter(final_score_sport_df, HigherAthleticAid == "HigherAthleticAid_Men")
+
+table(final_score_sport_df$HigherAthleticAid) #the original dataset has HigherAthleticAid_Men: 363 and HigherAthleticAid_Women 410
+
+HigherAthleticAid_Women_downsampled <- sample_n(HigherAthleticAid_Women, nrow(HigherAthleticAid_Men))
+balanced_final_df <- bind_rows(HigherAthleticAid_Women_downsampled, HigherAthleticAid_Men) #downsample HigherAthleticAid_Women to make the two outcome variable groups equal
+
+table(balanced_final_df$HigherAthleticAid) #Now, the balanced dataset has HigherAthleticAid_Men 363,and HigherAthleticAid_Women 363, we are ready for logistic regression
+
+levels(balanced_final_df$HigherAthleticAid) #levels the outcome variable group, HigherAthleticAid_Men is 0, HigherAthleticAid_Women is 1
+```
+
+#### Step 12: Scale all the variables
+```{r}
+glimpse(balanced_final_df)
+
+scaled_final_df <- balanced_final_df[,] %>% # Remove non-numeric columns
+  mutate_if(is.numeric, scale) # Scale numeric columns
+
+psych::describe(scaled_final_df)
+```
+
+#### Step 13: Compare the means of outcome variable groups 
+```{r}
+scaled_final_df %>%
+  group_by(HigherAthleticAid) %>%  # Group by HigherAthleticAid
+  summarise(across(where(is.numeric), list(mean = mean, sd = sd))) # Compare the means of HigherAthleticAid_Men and HigherAthleticAid_Women, then incorporate the findings into the regression analysis.
+```
+
+#### Step 14: Check for multicollinearity
+```{r}
+final_cor <- scaled_final_df[,2:5]  # Exclude outcome variable, HigherAthleticAid, for corrlation 
+corr_final <- cor(final_cor) 
+corr_final #all r<0.7, no munlticollinearity, ready for next step
+```
+#### Step 15: Cross-validated logistic regression
+```{r}
+library(caret)
+
+# Set up 10-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10, verbose = FALSE)
+# method = cross validation, number = ten times (10 fold cross-validation)
+
+# Logistic regression with stepwise selection
+lr_cv10 <- train(HigherAthleticAid ~ ., 
+                 data = scaled_final_df, 
+                 method = "glmStepAIC",
+                 direction = "backward", 
+                 trControl = train.control,
+                 family = "binomial",
+                 verbose = FALSE
+)
+
+# Cross-validated model results
+lr_cv10 # kappa and accuracy
+summary(lr_cv10$finalModel) # Coefficients and model summary
+```
+
+#### Step 16: Confusion Matrix
+```{r}
+# Add in residuals and predictions
+scaled_final_df <- scaled_final_df %>%
+  mutate(predicted.probabilities = lr_cv10$finalModel$fitted.values,
+         actual = ifelse(HigherAthleticAid == "HigherAthleticAid_Men", 0, 1), 
+         predicted = ifelse(predicted.probabilities > 0.50, 1, 0), # threshold of 0.5
+         predicted = as.factor(predicted), #convert to factor
+         actual = as.factor(actual)) #convert to factor
+
+
+# create confusion matrix using CARET
+confusionMatrix(scaled_final_df$actual, 
+                scaled_final_df$predicted, 
+                mode = "everything", 
+                positive = "1")
+# There are 260 true positives and 275 true negatives, resulting in an accuracy of 73.7% and a Kappa of 0.474, indicating the model performs well for prediction
+```
+#### Step 17: Final Model Interpretation
+```{r}
+final_model <- lr_cv10$finalModel
+summary(final_model) # all variables are significant 
+```
+
+```{r}
+exp(final_model$coefficients)
+
+#create function for computing probabilities
+probabilities <- function(coef) {
+  odds <- exp(coef)
+  prob <- odds / (1 + odds)
+  return(prob)
+}
+
+#compute probabilities
+probabilities(final_model$coefficients)
+```
+* Colleges with better student demographics, such as higher SAT and ACT scores, are 76.6% more likely to provide higher female athletic student aid.
+
+* An increase in the number of personnel, including head coaches, assistant coaches, and athletic team members, decreases the likelihood of higher female athletic student aid by 43.8%.
+
+* Higher college expenses on sport, such as coach salaries, recruitment costs, and Total expenses per participant for men team, reduce the likelihood of higher female athletic student aid by 13.1%.
+
+* Private colleges or those with higher costs per academic year are 57% more likely to provide higher female athletic student aid.
+
+#### Step 18: Mosaic Plot
+```{r}
+#put the actual and predicted values into a table
+mosaic_table <- table(scaled_final_df$actual, scaled_final_df$predicted)
+mosaic_table #check on that table
+
+#simple mosaic plot
+mosaicplot(mosaic_table,
+           main = "Confusion matrix for logistic regression",
+           sub = "Accuracy of prediction",
+           xlab = "Predicted",
+           ylab = "Actual",
+           color = "skyblue2",
+           border = "chocolate")
+```
+
+# 7. Conclusion
+We can predict that a college provides higher athletic student aid to women when it has higher student entry standard test scores (e.g., higher SAT and ACT scores), fewer personnel (head coaches, assistant coaches, and athletic team members), lower sports expenses, and is either a private college or one with higher annual academic costs.
+
+The Department of Education should encourage higher athletic student aid for women in large public schools with significant sports expenses and lower admission test score requirements. Ironically, these schools, often heavily influenced by football—a male-dominated sport—tend to allocate more athletic aid to men.

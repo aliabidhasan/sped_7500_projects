@@ -1,0 +1,743 @@
+---
+title: "Machine learning"
+author: "Scott Crossley"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: yes
+    number_sections: yes
+---
+
+**FIRST**
+
+Presentations on visualizing categorical data
+
+![0](images/cat_bad.png)
+
+
+# What is machine learning
+
+![](images/model_train.jpg)
+
+
+**The Differences**
+
+What are the goals of machine learning versus statistics
+
+Machine learning: Predictions
+
+  - Obtain a model that can make repeatable predictions
+
+Statistics: Inferences about relationships between variables
+
+  - Understand variables in relation to one another and the outcome
+  - And their significance
+
+**The Similarities**
+
+Machine learning is based on statistics
+
+But, lots of statistical models make predictions
+
+  - Linear regressions
+  - Logistic regressions
+  
+And lots of machine learning algorithms can be interpretable
+
+  - LASSO regressions
+  - Discriminant function analysis
+
+Both require lots and lots of data to be generalizable
+
+![](images/data.png)
+
+Both can very much be misinterpreted!
+
+![](images/extrapolating.png)
+
+**Statistical Machine Learning**
+
+I am not certain this is an actual thing, but it is what I try to practice when I can.
+
+Machine learning models that follow statistical assumptions
+
+- Key assumptions
+  - Distributions
+  - Statistical effects
+  - Multicollinearity
+  - Suppression effects
+
+![](images/ml_stats.png)
+
+
+## Splitting
+
+*The BIG QUESTION**
+
+Is the error rate on old data likely to be a good indicator of the error rate on new data?
+
+NO!
+
+Performance on training data (i.e., the training set) is definitely not a good indicator of performance on an independent test set.
+
+Any estimate of performance based on Training data will be optimistic.
+
+![](images/training_bro.jpeg)
+
+![](images/train_test.png)
+
+
+### Training and Test Sets
+
+![](images/training_test.png)
+
+**Training Set**
+The training set is used to develop models and feature sets 
+
+  - Estimating parameters
+  - Comparing models
+  - Majority of the data
+  - Sandbox for model building and faeture engineering
+
+**Test Set**
+
+The test set is used after training for estimating a final, unbiased assessment of the model’s performance. 
+
+  - Never use test data in training
+    - Look at it only once
+  - Should be unbiased 
+  - final arbiter to determine the efficacy of the model.
+
+![](images/train_test.jpeg)
+
+**Validation Sets**
+
+They exist....
+
+![](images/train_val_test.png)
+
+They are mostly used in neural network training.
+
+  - A lot with large language models
+
+Why?
+
+- measuring performance by re-predicting the training set samples leads to results that are overly optimistic 
+- so, a small validation set of data were held back and used to measure performance as the network was trained. - once the validation set error rate began to rise, the training would be halted
+  - optimize parameters 
+- validation set is a means to get a rough sense of how well the model performed prior to the test set.
+
+#### Splitting
+
+There are various ways to split data into training and test sets
+
+  - Random sampling
+  - Stratified base on outcome or metadata
+    - For classification, stratification allows frequency distribution of classes within factors to be approximately equal within the training and test sets
+
+**Random Sampling**
+
+Break into training and test sets using dplyr approach
+  - This is one of many ways you can do it
+
+```{r}
+
+library(dplyr)
+library(tidyverse)
+
+achieve_tib <- read_csv("tenn_2018_achieve.csv")
+
+set.seed(1234) #initialize a pseudorandom number generator so that train and test set will be the same each time you call functions
+
+#create new variable in tibble for division into training and test sets
+achieve_tib <- achieve_tib %>% 
+  mutate(id = row_number()) #new variable is based on row numbers
+
+str(achieve_tib)
+
+#70% of data as training set 
+train_set <- achieve_tib %>% 
+  sample_frac(0.70) #sample_frac = sample n rows from a table. Here, we select 70%
+
+#30% of data test set 
+test_set  <- anti_join(achieve_tib, train_set, by = 'id') 
+#anti_join, basically says grab what is in final_tib that is not in train_set
+
+```
+
+
+
+
+Using a simple random sample may allocate infrequent samples disproportionately into the training or test set. 
+
+  - Use stratification here 
+    - Easy when variables are categorical
+  - For regression problems, the outcome data can be artificially binned into quartiles
+    - then stratified sampling can be conducted four separate times. 
+
+You can do this in CARET (Classification And REgression Training)
+
+  - but only by one column
+  - CARET will soon be your best friend.
+    - Common package for machine learning in R
+
+The CARET package contains tools for:
+
+  - data splitting
+  - pre-processing
+  - feature selection (later)
+  - model tuning using resampling (later)
+  - variable importance estimation (later)
+  - a number of algorithms
+    - Linear regression
+    - Logistic regression
+    - Random forest (take the machine learning class)
+    - Support vector machines (take the machine learning class)
+    - Linear discriminant analyses (take the machine learning class)
+    - Neural net models (take the machine learning class)
+
+**Single Variable**
+
+Unbalanced classes in our data?
+
+```{r}
+
+options(scipen = 999)
+
+str(achieve_tib)
+
+# Call in some specific data
+achieve_tib_2 <- achieve_tib %>% 
+  select(district_number, school_name, subgroup, overall_subject, percent_on_mastered) %>% 
+  filter(!is.na(school_name)) %>% #get rid of district means
+  filter(!is.na(percent_on_mastered)) #%>% #remove rows with NA in percent_dropout
+  filter(subgroup != c("All Students", "Active Duty Military", "American Indian or Alaskan Native", "Black/Hispanic/Native", "English Learners", "Migrant", "Foster")) #remove all students
+
+str(achieve_tib_2)
+
+#Are some classes unbalanced by subgroup?
+
+achieve_tib_group <- achieve_tib_2 %>% 
+  group_by(subgroup) %>% 
+  summarize(
+    count = n() #get count by subgroup
+  ) %>% 
+  mutate(average_count = count/46698) #divide by sample size
+
+achieve_tib_group
+
+#pretty bad
+
+#Are some classes unbalanced by subject? 
+
+achieve_tib_subject <- achieve_tib_2 %>% 
+  group_by(overall_subject) %>% 
+  summarize(
+    count = n()
+  ) %>% 
+  mutate(average_count = count/46698)
+
+achieve_tib_subject
+
+#not as bad
+
+
+```
+
+
+Let's break data into training and test sets using CARET approach
+
+```{r}
+install.packages("caret")
+library(caret) #call in caret package
+
+set.seed(3456)
+
+trainIndex <- createDataPartition(achieve_tib_2$subgroup, p = .7,
+                                  #this calls in the variable to stratify and percent
+                                  list = FALSE, #should results be in list or matrix
+                                  times = 1) #number of partitions to make
+head(trainIndex)
+
+
+
+achieve_tib_Train <- achieve_tib_2[ trainIndex,] # 70% for train
+achieve_tib_Test  <- achieve_tib_2[-trainIndex,] # 30% for test
+
+#the training and test set are then used in CARET models for machine learning
+#more on this later...
+
+```
+
+## Let's check the partition
+
+```{r}
+
+achieve_tib_Train_group <- achieve_tib_Train %>% 
+  group_by(subgroup) %>% 
+  summarize(
+    count = n()
+  ) %>% 
+  mutate(average_count = count/32696)
+
+achieve_tib_Train_group
+
+#partition is similar!
+
+```
+
+**In dplyr**
+
+Using group_by and mutate with a split
+
+With achievement data, we would probably want to stratify by
+
+- district number
+- subgroup
+- overall subject
+
+group_by(var1, var2, var3)
+
+```{r}
+
+glimpse(achieve_tib_2)
+
+# One group
+stratified_split_1 <- achieve_tib_2 %>%
+  group_by(subgroup) %>%
+  mutate(split = sample(c("train", "test"), size = n(), replace = TRUE, prob = c(0.7, 0.3))) 
+stratified_split_1
+
+train_data <- stratified_split_1 %>% filter(split == "train")
+test_data <- stratified_split_1 %>% filter(split == "test")
+
+#assess the split
+
+orig_perc <- achieve_tib_2 %>%
+  group_by(subgroup) %>%
+  summarise(percentage = n() / nrow(achieve_tib_2) * 100) #get average per subgroup
+
+orig_perc
+
+train_perc <- train_data %>%
+  group_by(subgroup) %>%
+  summarise(percentage = n() / nrow(train_data) * 100)
+
+test_perc <- test_data %>%
+  group_by(subgroup) %>%
+  summarise(percentage = n() / nrow(test_data) * 100)
+
+#compare all the data
+comparison <- bind_rows( #bind them together
+  orig_perc %>% mutate(set = "Original"), #assign to variable "set"
+  train_perc %>% mutate(set = "Train"),
+  test_perc %>% mutate(set = "Test")
+) %>% 
+  arrange(subgroup) #arrange by subgroup for comparison
+  
+
+print(comparison)
+
+
+```
+
+
+## Oversampling and Undersampling
+
+
+![](images/unbalanced_train.jpeg)
+
+Unbalanced datasets have  skew in the class distribution
+
+Bias in the training dataset based on skew can influence machine learning algorithms (regression based)
+  
+  - Logistic regression may entirely ignore the minority class
+
+One solution is to randomly resample the training dataset. 
+
+1. Under-sample: Delete examples from the majority class
+  - can result in losing valuable information
+2. Over-sample: Duplicate examples from the minority class
+  - can result in overfitting data
+  
+The best solution is propensity matching, but that is another class...
+
+![](images/over_under_sample.png)
+
+We will use the Rose package for this.
+
+Data of interest
+
+![](images/data_sampling.png)
+
+Say we want to compare Asian and Black or African American
+
+
+```{r}
+#this will resample data
+#https://www.rdocumentation.org/packages/ROSE/versions/0.0-4/topics/ovun.sample
+
+install.packages("ROSE")
+library(ROSE)
+library(tidyverse)
+
+#data we actually want
+glimpse(achieve_tib_2)
+
+#sample size for oversample
+4240*2 #sample size needed (this is double the size for Black/African American)
+1188*2
+
+#grab up data we want
+sampling_data <- achieve_tib_2 %>% 
+  filter(subgroup == "Asian" | subgroup == "Black or African American")
+
+#what are sizes
+table(sampling_data$subgroup) 
+
+#get the under-sample
+
+under_sample_data <- ovun.sample(subgroup~., data = sampling_data, method = "under", N = 2376, seed=123)$data
+#$data extracts the data component from the resulting object returned by the ovun.sample()
+
+glimpse(under_sample_data)
+table(under_sample_data$subgroup) #is it done correctly?
+
+
+#get the over-sample
+
+over_sample_data <- ovun.sample(subgroup~., data = sampling_data, method = "over", N = 8480, seed=123)$data
+#$data extracts the data component from the resulting object returned by the ovun.sample()
+
+glimpse(over_sample_data)
+table(over_sample_data$subgroup) #is it done correctly?
+
+
+```
+
+
+## Resampling
+
+Splitting data was focused on creating a training and a test set to assess performance on a held-out data set.
+
+- One problem with this is it requires a large percentage of the data to be unseen.
+
+What if
+
+- You have a small data set
+- Want to maximize training on the full data set?
+
+The solution to this is resampling
+
+- Basically sampling pieces of the data bit by bit
+
+### Cross-Validation
+
+N-fold cross-validation creates N different versions of the data that have the same approximate size.
+  
+  - 10-fold cross-validation is most common
+
+- Each of the N assessment sets contains 1/N of the data and each of these exclude different data points. 
+- The analysis sets contain the remainder (typically called the “folds”) 
+- Suppose N = 10
+  - then there are 10 different versions of 90% of the data
+  - also 10 versions of the remaining 10% for each corresponding resample.
+
+In N-fold cross-validation, a model is created on the first fold (analysis set) and the corresponding assessment set is predicted by the model. 
+
+- The assessment set is summarized using the chosen performance measures (e.g., RMSE, R2) and these statistics are saved. 
+- Process proceeds in a round-robin fashion so that, in the end, there are N estimates of performance for the model 
+- Each estimate was calculated on a different assessment set. 
+- The cross-validation estimate of performance is computed by averaging the V individual metrics.
+
+![](images/k_fold.png)
+
+Stratified splitting
+
+- Can use a categorical variable in stratified splitting techniques, to make sure that the analysis and assessment sets produce the same frequency distribution of the outcome.
+
+**LOOCV**
+
+- Leave-one-out cross-validation, has N equal to the size of the training set. 
+- It is a somewhat deprecated technique and may only be useful when the training set size is extremely small (Shao 1993).
+
+![](images/loocv.png)
+
+This is also done in CARET using the following lines of code
+
+```{r}
+
+#set seed for replication of cross-validation at later time
+set.seed(123)
+
+# Set up repeated k-fold cross-validation
+train.control <- trainControl(method = "cv", number = 10)
+#method = cross validation, number = ten times (10 fold cross-validation)
+
+
+# Set up repeated k-fold cross-validation
+train_control2 <- trainControl(method = "cv", number = 52927) #52927 is the size of the tibble
+#method = cross validation, number = LOOCV
+
+#the training and test set are then used in CARET models for machine learning
+#more on this later...
+```
+
+
+### Bootstrap
+
+A bootstrap resample of the data is a random sample that is the same size as the training set
+  
+  - data are sampled with replacement 
+  - there is a 63.2% chance that any training set member is included in the bootstrap sample at least once
+  - bootstrap resample is used as the analysis set and the assessment set
+  - bootstrap sampling is conducted N times
+  - bootstrap estimate of performance is the mean of N results.
+  - It includes training data in the testing data!!!
+    - Which is bad
+    - Can provide estimates of standard errors and confidence intervals
+      - Quantify uncertainty
+
+![](images/bootstrap2.png)
+
+Bootstrapping code
+
+```{r}
+
+#set seed for replication of cross-validation at later time
+set.seed(123)
+
+# 10 bootstrap samples
+bootControl <- trainControl(method = "boot",
+                           number = 10)
+
+#the training and test set are then used in CARET models for machine learning
+#more on this later...
+```
+
+
+## Overfitting
+
+
+![](images/overfitting_2.jpeg)
+
+What is over-fitting
+
+- When statistical model fits exactly against their training data because 
+  - It was trained for too long or is too complex 
+    - it can start to learn the noise (irrelevant information) within the dataset. 
+- When this occurs, the model will not perform accurately in the test set
+  - models over-interpret patterns in the training set
+
+Or
+
+When statisticals model begins to describe the random error in the data rather than the relationships between variables
+
+![](images/overfitting.png)
+
+**How overfitting occurs**
+
+In small datasets
+
+  -Too few observations and too many predictors
+
+In large datasets
+
+  -Too many potentially irrelevant data points are used for prediction results (actually, this is an  underfit model)
+
+![](images/overfitting_2.png)
+
+## Overfitting in Regression Models
+
+In regression analysis, overfitting can produce misleading R-squared values, regression coefficients, and p-values. 
+
+Overfit regression models have too many terms for the number of observations. When this occurs, the regression coefficients represent the noise rather than the genuine relationships in the population.
+
+**Example**
+
+Given a  total sample size of 20 and we need to estimate one population mean using a 1-sample t-test. 
+
+  - What are the differences between the mean and an expected mean
+  - With 20 samples, you may obtain a good estimate
+
+However, if we want to use a 2-sample t-test to estimate the means of two populations
+
+  - Only 10 observations to estimate each mean. 
+  
+If you want to estimate the means of three or more populations (with an ANOVA, say)
+
+  - You have 5-7 observations to estimate each mean
+  - Estimate become more errative
+  - New sample unlikely to replicate estimates of small samples
+  
+With regression models
+
+  - The problems occur when you try to estimate too many parameters from the sample. 
+  - Each term in the model forces the regression analysis to estimate a parameter using a fixed sample size. 
+  - The size of your sample restricts the number of terms that you can safely add to the model before you obtain erratic estimates.
+
+To obtain reliable results, you need a sample size that is 
+  - large enough to handle the model complexity that your study requires
+  - more complex models need larger samples 
+
+In reality
+
+ - Control the number of variables per observation
+  - 30:1 (least conservative)
+  - 15:1
+  - 10:1 (most conservative)
+
+
+![](images/overfitting_3.jpeg)
+
+## Feature Selection
+
+**Supervised feature selection** 
+
+  - the choice of which predictors to retain is guided by their affect on the outcome.
+  - finding the best global solution (i.e., the subset of predictors that has best performance) requires evaluating all possible predictor subsets
+  - generally infeasible so
+    - Focus is often which variables to remove from model
+      - to reduce model complexity
+      - removing predictor can reduce costs of acquiring data and make models more computationally efficient
+
+**Multicollinearity to reduce variables**
+
+You first step to remove variables and reduce model complexity is to remove highly collinear variables
+  
+  - Generally any variables that correlate at greater than .7 (although threshold can be .9 as well)
+    - Do not remove all variables that are multicollinear
+      - Keep the variable with the strongest relationship with outcome
+  - Checking VIF values in linear regression is a step towards this as well
+
+**Feature selection to reduce variables**
+
+- intrinsic methods
+- wrapper methods
+
+###Intrinsic methods
+
+**Intrinsic methods** have feature selection naturally incorporated with the modeling process. 
+
+Advantages (Intrinsic methods)
+
+1. relatively fast since the selection process is embedded within the model fitting process
+2. no external feature selection tool is required
+3. provide a direct connection between selecting features and the objective function (the statistic)
+
+Disadvantages (Intrinsic methods)
+
+1. model-dependent
+2. predictive performance may be sub-optimal if model fit would be better with a wrapper approach.
+
+The most common intrinsic approach is **LASSO**
+
+  - Least Absolute Shrinkage and Selection Operator (LASSO)
+  - It is very similar to ridge regression
+    - fit a new line that doesn’t fit the training data by introducing a certain Amount on Bias into the new trend line
+      - This bias is a penalty function based on Lambda (lambda*slope^2)
+        - Lambda is a Tuning Parameter that controls the bias-variance tradeoff
+      - Ridge can only shrink the slope asynmtotically close to zero
+        - LASSO can shrink to zero
+  - Regular linear regression uses ordinary least squares (OLS)
+    - minimizing the sum of the squares of the differences between the observed dependent variable (values of the variable being observed) in the given dataset and those predicted by the linear function of the independent variable
+    
+    -Keeps all variables
+  - LASSO is also a regularization model
+    - Penalizes or shrinks predictor coefficients to improve the model fit
+    - If co-efficient shrinks to 0, it is removed from model
+      - So.. it selects variables
+    - Not great with variables that strongly correlate
+
+**Why Regularization?**
+
+Overfitting and fitting on training data
+
+  - The overfitted model performs better, here, of course
+
+![](images/regularization.png)
+    
+But what about with testing data?
+
+  - It may perform much worse
+
+![](images/regularization_1.png)
+
+Lasso penalizes the residuals of the models
+
+![](images/lasso_penalty.png)
+
+
+The result is a best-fit line with a smaller slope
+
+![](images/best_fit.png)
+
+Hopefully, the smaller slope will fit the test data better
+
+![](images/lasso_w_test.png)
+
+What happens in a LASSO regression in practice
+
+  1. Check for multicollinearity
+  
+  2. Set the **lambda value**
+    - Lambda value is similar in LASSO to a ridge regression, but the Penalty Function now is: lambda*|slope|. 
+    
+  3. Use 10-Fold Cross Validation is used in order to determine which LAMBDA give back the lowest variance.
+
+
+###Wrapper Methods
+
+**Wrapper methods** use iterative search procedures 
+
+- repeatedly supply predictor subsets to the model 
+- use the resulting model performance estimate to guide the selection of the next subset to evaluate
+- a wrapper method will iterate to a smaller set of predictors that has better predictive performance than the original predictor set. 
+
+The most common wrapper approaches are step-wise approaches
+
+1. Forward
+2. Backwards
+3. Both
+
+**A step-wise approach**
+
+What is stepwise?
+
+A method of fitting regression models in which the choice of predictive variables is carried out by an automatic procedure. 
+
+- In each step, a variable is considered for addition to or subtraction from the set of explanatory variables based on some prespecified criterion. 
+- Usually p value
+
+![](images/stepwise.png)
+
+![](images/stepwise_2.png)
+
+This is done in caret using a method selection (more on this later)
+
+In practice, model use both forward and backward stepwise approaches together.
+
+## Your Turn
+
+1. Stratify the data in achieve_tib_2 into training and test sets using
+  
+  - Two variables
+  - Three variables
+  - See line 286 for guidance
+  
+2. Unbalanced samples
+  
+  - Downsample ELA so it matches Science
+  - Oversample Science so it match ELA
+
+## Assignments
+
+**First Assignment is Due SUNDAY!!!**
+
+October 20th
+
+- Feel free to send me rough draft by Thursday...
+- There are example assignments
+- There is a rubric
+- Let's look them over again quickly.
+

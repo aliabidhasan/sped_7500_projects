@@ -1,0 +1,122 @@
+---
+title: "Data Project (Updated Draft) - Ali Abid"
+author: "Ali Abid"
+date: "2024-05-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Despite being the fifth most populous country in the world, Pakistan is only able to spend as much as 1.7 percent of its GDP on education. The tumultuous domestic political climate, in conjunction with the global geopolitical landscape, has undeniably resulted in a series of macroeconomic crises within the nation. These crises have unfortunately led to widespread inflation, a rise in poverty, and a profound literacy crisis that poses significant challenges for future generations. A sizable children population (around 26 million) remains out of school which can have devastating impact on the opportunities of the country to grow out of these crises. 
+
+In recent times, the World Bank has observed that Pakistan’s Human Capital Index (HCI) has dropped to 0.41, making it lower than other South Asian peers. Hence, as researchers, there is a need for greater critical understanding about rectifying and remedying the problems at hand. Rather than focusing on all-encompassing solutions, more data-driven, targeted approaches are required to provide stability to the educational sector. 
+
+In light of this, the [ASER Pakistan’s 2023 Report](https://aserpakistan.org/report) and its [data set](https://aserpakistan.org/index.php?func=data_statistics) provides valuable, and up to date insights into the household data, school related information, and children’s literacy through testing. The ASER Pakistan works as a private, non-profit think-tank but receives development funding through the government and other international non-governmental organizations to conduct a sample survey across 123 urban districts and 151 rural districts in Pakistan. The 2023 data shows that they reached out to 272,300 children to conduct their foundational literacy and proficiency tests.
+
+# Research Questions
+
+I am particularly interested in exploring the links between the three available data sets: household, school, and child. 
+
+Hence, my research questions are:
+
+> - What is the relationship between school characteristics (e.g., type of school, whether it is a co-educational setup or single-gender, the medium instruction at school, enrollment size, and teachers' educational and professional qualifications on children's arithmetic and English reading levels in Pakistan?
+
+_Hypothesis_: Children in government schools are more likely to have lower arithmetic and English reading levels compared to children in private schools controlling for other factors.
+
+> - How do household characteristics, such as total earning members, type of household, and Time required to travel to school one-way (hours) influence children's arithmetic and reading levels in Pakistan?
+
+_Hypothesis_: Children from households with more earning members are more likely to have higher arithmetic and English reading levels compared to children from households with fewer or no earning members controlling for the time required to travel to school.
+
+> - Do children from households that experience greater negative impacts on their earnings due to climate change tend to have lower learning outcomes in English reading and arithmetic, and if so, to what extent?
+
+_Hypothesis_: Children from households that experience greater negative impacts on their earnings due to climate change are more likely to have lower learning outcomes in English reading and arithmetic compared to children from households that do not experience such impacts.
+
+| Variable | Variable Description                            | Value Units                                                                                                                                                  | Type    |
+| -------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- |
+|          | Outcome Level                                   |                                                                                                                                                              |         |
+| C15      | Learning Level/Reading in Local/Native Language | 1\. Beginner/Nothing 2. Letters 3. Words 4. Sentences 5. Story                                                                                               | Ordinal |
+| C19      | Arithmetic Levels                               | 1\. Beginner/Nothing 2. Recognition of 1-9 3. Recognition of 10-99 4. Recognition of 100-200 5. Subtraction of 2-digit 6. Subtraction of 4-digit 7. Division | Ordinal |
+| C20      | English Reading Level                           | 1\. Beginner/Nothing 2. Capital Letters 3. Small Letters 4. Words 5. Sentences                                                                               | Ordinal |
+
+# Research Methods
+
+The three data sets involved in this project are: `household`, `school`, and `child`. The data included in these sets are not raw data but the sampled data used to build up the 2023 report. While ASER Pakistan's coding manual for the 2023 data mentions more data sets such as `village` and `parent` these have not yet been released and hence, are not included in this analysis. The coding manual only lists the variables, their descriptions, and  the values/units for each variable.
+
+For all of these research questions, the student learning outcomes (dependent variables) can be consolidated as the **arithmetic level** and **English reading level** as available in the `child` data set. Since the data on child-level learning outcomes is linked to the household ID from `household` data set, which in turn is linked to the region (province) and village ID found in the `school` data set, the data can be merged through these keys with the household and school data sets to explore the relationships between the household, school, and child characteristics.
+
+
+### Predictor Variables (Household)
+
+| File Name: Household      |                                                                                               |                                                                                  |         |
+| ------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ------- |
+| Variable                  | Variable Description                                                                          | Value Units                                                                      | Type    |
+|                           | Dataset Identifier                                                                            |                                                                                  |         |
+| HOUSEHOLDID               | Household ID                                                                                  |                                                                                  |         |
+| VMAPID                    | Village Map ID                                                                                |                                                                                  |         |
+|                           | Household Characteristics                                                                     |                                                                                  |         |
+| HOUSETYPE H08             | Type of Household                                                                             | 1\. Katcha 2. Semi-Pucca 3. Pucca                                                | Ordinal |
+| HOUSEHOLDCOUNTER H09      | Total Count of Household Members                                                              | Numerical                                                                        | Ratio   |
+| EARNINGMEMBERS H11        | Total Earning Members of Household                                                            | Numerical                                                                        | Ratio   |
+| CAR H25a                  | Total Cars of Household                                                                       | Numerical                                                                        | Ratio   |
+| MOTORCYLE H25b            | Total Motorcyles of Household                                                                 | Numerical                                                                        | Ratio   |
+| TIME REQUIRED ONE-WAY H38 | Time required to travel to school one-way (hours)                                             | 1\. Less than 0.5 hour 2. 0.5 hour to 1 hour 3. More than 1 hour                 | Ordinal |
+|                           | Impact of Climate Change                                                                      |                                                                                  |         |
+| CLIMATECHANGE H33         | How well informed are you about the climate change?                                           | 1\. Informed 2. Don't Know 3. Uninformed                                         | Ordinal |
+| FLOODIMPACTED H34         | Has your family been impacted by natural disaster/flood in the last year (2022)?              | 1\. Yes, significantly 2. Yes, moderately 3. No, not affected                    | Ordinal |
+| EARNINGIMPACTED H35       | To what extent was your earning negatively impacted by climate change?                        | 1\. Less than 10% 2. Btw 11-25% 3. Btw 26-50% 4. More than 50% 5. No effect      | Ordinal |
+| PSYCHOLOGICALIMPACTED H36 | Has your emotional/psychological wellbeing affected due to climate change?                    | 1\. Substantially 2. Somewhat Affected 3. Affected Only A Bit 4. Not At All      | Ordinal |
+| SCHOOLINGAFFECTED H44     | Was any of your children's schooling affected due to a natural disaster within the last year? | 1\. Extremely affected 2. Moderately affected 3. Somewhat affected 4. Not At All | Ordinal |
+
+
+### Predictor Variables (School)
+
+| File Name: School |                                                                |                                             |         |
+| ----------------- | -------------------------------------------------------------- | ------------------------------------------- | ------- |
+| Variable          | Variable Description                                           | Value Units                                 | Type    |
+| S008TA            | Teachers Appointed                                             | Numerical                                   | Ratio   |
+| S008TP            | Teachers Present                                               | Numerical                                   | Ratio   |
+|                   | Teachers' Educational Qualification                            |                                             |         |
+| S009b             | Teacher Qualification: Matric (Completed)                      | Numerical                                   | Ratio   |
+| S009c             | Teacher Qualification: F.A./F.Sc (Completed)                   | Numerical                                   | Ratio   |
+| S009d             | Teacher Qualification: B.A./B.Sc (Completed)                   | Numerical                                   | Ratio   |
+| S009e             | Teacher Qualification: M.A./MSc (Completed)                    | Numerical                                   | Ratio   |
+| S009f             | Teacher Qualification: MPhil (Completed)                       | Numerical                                   | Ratio   |
+| S009z             | Teacher Qualification: (Others) (Completed)                    | Numerical                                   | Ratio   |
+|                   | Teachers' Professional Qualification                           |                                             |         |
+| S010a             | Teacher Prof Qualification: None                               | Numerical                                   | Ratio   |
+| S010b             | Teacher Prof Qualification: Primary Teaching Certificate (PTC) | Numerical                                   | Ratio   |
+| S010c             | Teacher Prof Qualification: Certified Teacher (CT)             | Numerical                                   | Ratio   |
+| S010d             | Teacher Prof Qualification: B.Ed.                              | Numerical                                   | Ratio   |
+| S010e             | Teacher Prof Qualification: M.A./M.Ed                          | Numerical                                   | Ratio   |
+| S010z             | Teacher Prof Qualification: Others                             | Numerical                                   | Ratio   |
+|                   | School Characteristics                                         |                                             |         |
+| STYPE             | Type of School                                                 | 1\. Government 2. Private                   | Ordinal |
+| S001              | School is Co-Ed or Single gender                               | 1\. Boys + Girls 2. Girls Only 3. Boys Only | Ordinal |
+| S002              | Medium of Instruction at School                                | 1\. English 2. Urdu 3. Sindhi 4. Others     | Ordinal |
+| S002Y             | School Establishment Year                                      |                                             |         |
+| S007E             | School Total Enrollment (Students)                             | Numerical                                   | Ratio   |
+| S007P             | School Present (Students)                                      | Numerical                                   | Ratio   |
+|                   | Dataset Identifiers                                            |                                             |         |
+| AREA              | Area Category: Rural                                           | 2 (Rural)                                   | Ratio   |
+| VMAPID            | Village Map ID                                                 |                                             |         |
+| RNAME             | Region Name (Provinces)                                        |                                             | Nominal |
+
+### Predictor Variables (Child)
+
+| File Name: Child |                       |                                                                 |                     |
+| ---------------- | --------------------- | --------------------------------------------------------------- | ------------------- |
+| Variable         | Variable Description  | Value Units                                                     | Type                |
+|                  | Dataset Identifier    |                                                                 |                     |
+|                  |                       |                                                                 |                     |
+| AREA             | Rural                 | Rural                                                           | Categorical Nominal |
+| HHID             | Household ID          |                                                                 | Categorical Nominal |
+| RNAME            | Region (Province)     |                                                                 | Categorical Nominal |
+|                  | Child Characteristics |                                                                 |                     |
+| C10              | Current Class/Grade   | Grades 1-12, Nursery, PG/KGPrep, Nursery                        | Ordinal             |
+| C11              | Institution Type      | 1\. Govt 2. Private 3. Madarassah 4. Non-formal Education/Other | Ordinal             |
+
+

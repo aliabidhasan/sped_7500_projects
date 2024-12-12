@@ -1,0 +1,633 @@
+---
+title: "redundant_prev_code_vis"
+author: "Ali Abid"
+date: "2024-10-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+# --- 1. Selecting Household Data ---
+aser_household_filtered <- aser_household %>%
+  select(
+    HouseholdId, VillageMapSurveyId, # Dataset Identifiers
+    HouseType, HouseholdCounter, EarningMembers, Car, MotorCycle,  # Household Characteristics
+    TravelTime, # Time to school
+    ClimateChange, FloodImpacted, EarningImpacted, # Climate Change Impact
+    PsychologicalImpacted, SchoolingAffected # More Climate Impact
+  ) %>%
+  rename(HHID = HouseholdId)
+
+# --- 2. Filter School Data ---
+aser_school_filtered <- aser_school %>%
+  select(
+    AREA, VMAPID, RNAME, DNAME, STYPE, # Dataset Identifiers
+    S008TA, S008TP, # Teachers: Appointed & Present
+    #S009b:S009z, # Teachers' Educational Qualifications (using the : to select a range)
+    #S010c:S010z, # Teachers' Professional Qualifications (using the : to select a range)
+    S001, S002, S002Y, S007E, S007P # School Characteristics 
+  )
+
+# --- 3. Filter Child Data ---
+aser_child_filtered <- aser_child %>%
+  select(
+    Id, AREA, HHID, VCODES, RNAME, DNAME, # Dataset Identifiers
+    C05, C12, C10, C11, # C05 means Educational Status, C12 means Surveyed School or Not
+    C15, C19, C20 # Outcome Variables: Learning Levels 
+  ) %>%
+  rename(VMAPID = VCODES)
+
+rm(aser_child, aser_household, aser_school)
+
+```
+
+### Filtering Out N/A Values
+
+```{r}
+# --- 1. Filter Household Data ---
+aser_household_filtered <- aser_household_filtered %>%
+  filter(!is.na(HouseType), !is.na(HouseholdCounter), !is.na(EarningMembers), !is.na(Car), !is.na(MotorCycle), !is.na(TravelTime), !is.na(ClimateChange), !is.na(FloodImpacted), !is.na(EarningImpacted), !is.na(PsychologicalImpacted), !is.na(SchoolingAffected))
+
+# --- 2. Filter School Data ---
+aser_school_filtered <- aser_school_filtered %>%
+  mutate(
+  S008TA = replace(S008TA, is.na(S008TA), 0),
+  S008TP = replace(S008TP, is.na(S008TP), 0),
+  S009b = replace(S009b, is.na(S009b), 0),
+  S009c = replace(S009c, is.na(S009c), 0),
+  S009d = replace(S009d, is.na(S009d), 0),
+  S009e = replace(S009e, is.na(S009e), 0),
+  S009f = replace(S009f, is.na(S009f), 0),
+  S009g = replace(S009g, is.na(S009g), 0),
+  S009z = replace(S009z, is.na(S009z), 0),
+  S010c = replace(S010c, is.na(S010c), 0),
+  S010b = replace(S010b, is.na(S010b), 0),
+  S010d = replace(S010d, is.na(S010d), 0),
+  S010e = replace(S010e, is.na(S010e), 0),
+  S010z = replace(S010z, is.na(S010z), 0),
+  STYPE = replace(STYPE, is.na(STYPE), 0),
+  S001 = replace(S001, is.na(S001), 0),
+  S002 = replace(S002, is.na(S002), 0),
+  S002Y = replace(S002Y, is.na(S002Y), 0),
+  S007E = replace(S007E, is.na(S007E), 0),
+  S007P = replace(S007P, is.na(S007P), 0)
+)
+
+# --- 3. Filter Child Data ---
+aser_child_filtered <- aser_child_filtered %>%
+  filter(!is.na(C10), !is.na(AREA), !is.na(HHID), !is.na(RNAME), !is.na(DNAME), !is.na(C05), !is.na(C12), !is.na(C11), !is.na(C15), !is.na(C19), !is.na(C20), (C12!=0))
+
+```
+
+### Looking at Data Identifiers
+
+```{r}
+# Child Dataset
+glimpse(aser_child_filtered) %>%
+  select(AREA, HHID, RNAME, DNAME) %>%
+  unique(aser_child_filtered$AREA)
+  unique(aser_child_filtered$RNAME) # Some provinces names have mistakes hence not unique. Need to fix the names.
+  unique(aser_child_filtered$DNAME) # District names are unique
+  count(aser_child_filtered, RNAME)
+  count(aser_child_filtered, DNAME)
+
+# School Dataset
+glimpse(aser_school_filtered) %>%
+  select(AREA, VMAPID, RNAME, DNAME) %>%
+  unique(aser_school_filtered$AREA)
+  unique(aser_school_filtered$RNAME)
+  unique(aser_school_filtered$DNAME) #Some district names are not unique
+  unique(aser_school_filtered$VMAPID) #VillageMapSurveyId is unique
+  count(aser_school_filtered, RNAME)
+  count(aser_school_filtered, DNAME)
+  count(aser_school_filtered, VMAPID)
+  
+# Household Dataset
+glimpse(aser_household_filtered) %>%
+  select(HouseholdId, VillageMapSurveyId) %>%
+  unique(aser_household_filtered$VillageMapSurveyId) # VillageMapSurveyId is unique
+  count(aser_household_filtered, VillageMapSurveyId)
+  count(aser_household_filtered, HouseholdId)
+  
+# Random Checking of few HouseholdId numbers from the Household Filtered Dataset to check if they are valid and present in the Child Filtered Dataset as well for merging
+  
+1366011 %in% aser_child_filtered$HHID
+1370090 %in% aser_child_filtered$HHID
+1370368 %in% aser_child_filtered$HHID
+1369883 %in% aser_child_filtered$HHID
+1369847 %in% aser_child_filtered$HHID
+```
+
+### Fixing the naming conventions of RNAME in Child Dataset to match with School Dataset
+
+```{r}
+# Fixing the naming conventions of RNAME in Child Dataset to match with School Dataset
+library(stringr)
+
+aser_child_filtered <- aser_child_filtered %>%
+  mutate(RNAME = recode(RNAME, 
+                       "BALOCHIST" = "BALOCHISTAN", 
+                       "KHYBER PA" = "KHYBER PAKHTUNKHWA")) %>%
+  unique()
+
+# Recoding "2" written in AREA of school_filtered_dataset to "rural" for better understanding
+
+aser_school_filtered <- aser_school_filtered %>%
+  mutate(AREA = recode(AREA, 
+                       "2" = "rural"))
+
+aser_household_filtered <- aser_household_filtered %>%
+   rename(VMAPID = VillageMapSurveyId)
+
+```
+
+### Looking at Data Identifiers
+
+```{r}
+# Child Dataset
+glimpse(aser_child_filtered) %>%
+  select(AREA, HHID, RNAME, DNAME) %>%
+  unique(aser_child_filtered$AREA)
+  unique(aser_child_filtered$RNAME) # Some provinces names have mistakes hence not unique. Need to fix the names.
+  unique(aser_child_filtered$DNAME) # District names are unique
+  count(aser_child_filtered, RNAME)
+  count(aser_child_filtered, DNAME)
+
+# School Dataset
+glimpse(aser_school_filtered) %>%
+  select(AREA, VMAPID, RNAME, DNAME) %>%
+  unique(aser_school_filtered$AREA)
+  unique(aser_school_filtered$RNAME)
+  unique(aser_school_filtered$DNAME) #Some district names are not unique
+  unique(aser_school_filtered$VMAPID) #VillageMapSurveyId is unique
+  count(aser_school_filtered, RNAME)
+  count(aser_school_filtered, DNAME)
+  count(aser_school_filtered, VMAPID)
+  
+# Household Dataset
+glimpse(aser_household_filtered) %>%
+  select(HouseholdId, VillageMapSurveyId) %>%
+  unique(aser_household_filtered$VillageMapSurveyId) # VillageMapSurveyId is unique
+  count(aser_household_filtered, VillageMapSurveyId)
+  count(aser_household_filtered, HouseholdId)
+  
+# Random Checking of few HouseholdId numbers from the Household Filtered Dataset to check if they are valid and present in the Child Filtered Dataset as well for merging
+  
+1366011 %in% aser_child_filtered$HHID
+1370090 %in% aser_child_filtered$HHID
+1370368 %in% aser_child_filtered$HHID
+1369883 %in% aser_child_filtered$HHID
+1369847 %in% aser_child_filtered$HHID
+```
+
+### Fixing the naming conventions of RNAME in Child Dataset to match with School Dataset
+
+```{r}
+# Fixing the naming conventions of RNAME in Child Dataset to match with School Dataset
+library(stringr)
+
+aser_child_filtered <- aser_child_filtered %>%
+  mutate(RNAME = recode(RNAME, 
+                       "BALOCHIST" = "BALOCHISTAN", 
+                       "KHYBER PA" = "KHYBER PAKHTUNKHWA")) %>%
+  unique()
+
+# Recoding "2" written in AREA of school_filtered_dataset to "rural" for better understanding
+
+aser_school_filtered <- aser_school_filtered %>%
+  mutate(AREA = recode(AREA, 
+                       "2" = "rural"))
+
+aser_household_filtered <- aser_household_filtered %>%
+   rename(VMAPID = VillageMapSurveyId)
+
+```
+
+### Merging the Child and Household Datasets
+
+```{r}
+# Merging the School and Household Datasets
+aser_child_household_merged <- left_join(aser_child_filtered, aser_household_filtered, by = c("HHID")) %>%
+  group_by(RNAME)
+
+aser_school_child_household_merged <- left_join(aser_child_household_merged, aser_school_filtered, by = c("AREA", "RNAME", "DNAME")) %>%
+  group_by(RNAME)
+
+unique(aser_school_child_household_merged$HouseType)
+
+unique(aser_school_child_household_merged$C05)
+
+aser_school_child_household_merged_2 <- aser_school_child_household_merged %>%
+  distinct(Id, .keep_all = TRUE)
+
+colnames(aser_school_child_household_merged_2)
+
+aser_school_child_household_merged_2 <- aser_school_child_household_merged_2 %>%
+  group_by(HHID) %>%
+  filter(C12 == 1) %>% #Filtering out only those children who were surveyed and their schools were surveyed as well
+  length(unique("Id")) == length("Id") #All child entries are unique
+
+
+unique(aser_school_child_household_merged_2$Id)
+
+```
+
+### Making the Data Types Consistent (Factors and Integers)
+
+```{r}
+aser_child_filtered <- aser_child_filtered %>%
+  mutate_if(is.character, as.factor) %>%
+  mutate_if(is.numeric, as.integer)
+
+aser_school_filtered <- aser_school_filtered %>%
+  mutate_if(is.character, as.factor) %>%
+  mutate_if(is.numeric, as.integer)
+
+aser_household_filtered <- aser_household_filtered %>%
+  mutate_if(is.character, as.factor) %>%
+  mutate_if(is.numeric, as.integer)
+
+glimpse(aser_child_filtered)
+glimpse(aser_school_filtered)
+glimpse(aser_household_filtered)
+
+```
+
+### Filtering Out the NA values
+
+```{r}
+# Filtering out the NA values
+aser_child_filtered <- aser_child_filtered %>%
+  filter(!is.na(C10), !is.na(AREA), !is.na(HHID), !is.na(RNAME), !is.na(DNAME), !is.na(C11), !is.na(C15), !is.na(C19), !is.na(C20))
+aser_school_filtered <- aser_school_filtered %>%
+  filter(!is.na(AREA), !is.na(VMAPID), !is.na(RNAME), !is.na(DNAME), !is.na(VlgId), !is.na(VlgCode), !is.na(SID), !is.na(STYPE), !is.na(S008TA), !is.na(S008TP), !is.na(S009c), !is.na(S009d), !is.na(S009e), !is.na(S009f), !is.na(S009g), !is.na(S009z), !is.na(S010c), !is.na(S010b), !is.na(S010d), !is.na(S010e), !is.na(S010z), !is.na(S001), !is.na(S002), !is.na(S002Y), !is.na(S007E), !is.na(S007P))
+aser_household_filtered <- aser_household_filtered %>%
+  filter(!is.na(HouseType), !is.na(HouseholdCounter), !is.na(EarningMembers), !is.na(Car), !is.na(MotorCycle), !is.na(TravelTime), !is.na(ClimateChange), !is.na(FloodImpacted), !is.na(EarningImpacted), !is.na(PsychologicalImpacted), !is.na(SchoolingAffected))
+```
+
+### Renaming and Recoding
+
+```{r}
+aser_child_filtered <- aser_child_filtered %>%
+  mutate(
+    C11 = case_when(
+      C11 == 1 ~ "Government",
+      C11 == 2 ~ "Private",
+      C11 == 3 ~ "Madarassah",
+      C11 == 4 ~ "NFE/Other",
+      TRUE ~ "Blank/Not Available"
+    )
+  ) %>%
+  mutate(C11 = factor(C11))
+
+aser_child_filtered <- aser_child_filtered %>%
+  mutate(
+    C15 = case_when(
+      C15 == 1 ~ "Beginner/Nothing",
+      C15 == 2 ~ "Letters",
+      C15 == 3 ~ "Words",
+      C15 == 4 ~ "Sentences",
+      C15 == 5 ~ "Story",
+      TRUE ~ "Blank/Not Available"
+    )
+  ) %>%
+  mutate(C15 = factor(C15))
+
+aser_child_filtered <- aser_child_filtered %>%
+  mutate(
+    C19 = case_when(
+      C19 == 1 ~ "Beginner/Nothing",
+      C19 == 2 ~ "Recognition of 1-9",
+      C19 == 3 ~ "Recognition of 10-99",
+      C19 == 4 ~ "Recognition of 100-200",
+      C19 == 5 ~ "Subtraction (2 Dig.)",
+      C19 == 6 ~ "Subtraction (4 Dig.)",
+      C19 == 7 ~ "Division",
+      TRUE ~ "Missing/Other"
+    )
+  ) %>%
+  mutate(C19 = factor(C19))
+
+aser_child_filtered <- aser_child_filtered %>%
+  mutate(
+    C20 = recode(
+      C20,
+      "1" = "Beginner/Nothing",
+      "2" = "Capital letters",
+      "3" = "Small letters",
+      "4" = "Words",
+      "5" = "Sentences",
+      .default = "Blank/Not Available"
+    )
+  ) %>%
+  mutate(C20 = factor(C20))
+
+aser_household_filtered <- aser_household_filtered %>%
+  mutate(
+    HouseType = case_when(
+      HouseType == 1 ~ "Katcha",
+      HouseType == 2 ~ "Semi-Pucca",
+      HouseType == 3 ~ "Pucca",
+      TRUE ~ "Blank/Not Available"
+    )
+  ) %>%
+  mutate(HouseType = factor(HouseType))
+
+aser_household_filtered <- aser_household_filtered %>%
+  mutate(
+    ClimateChange = case_when(
+      ClimateChange == 1 ~ "Informed",
+      ClimateChange == 2 ~ "Don't Know",
+      ClimateChange == 3 ~ "Uninformed",
+      TRUE ~ "Blank/Not Available"
+    )) %>%
+  mutate(ClimateChange = factor(ClimateChange))
+
+aser_household_filtered <- aser_household_filtered %>%
+  mutate(
+    FloodImpacted = case_when(
+      FloodImpacted == 1 ~ "Yes, significantly",
+      FloodImpacted == 2 ~ "Yes, moderately",
+      FloodImpacted == 3 ~ "No, not affected",
+      TRUE ~ "Blank/Not Available"
+    )) %>%
+  mutate(FloodImpacted = factor(FloodImpacted))
+
+aser_household_filtered <- aser_household_filtered %>%
+  mutate(
+    EarningImpacted = case_when(
+      EarningImpacted == 1 ~ "Less than 10%",
+      EarningImpacted == 2 ~ "Btw 11% - 25%",
+      EarningImpacted == 3 ~ "Btw 26% - 50%",
+      EarningImpacted == 4 ~ "More than 50%",
+      EarningImpacted == 5 ~ "No effect",
+      TRUE ~ "Blank/Not Available"
+    )) %>%
+  mutate(EarningImpacted = factor(EarningImpacted)
+  )
+
+aser_household_filtered <- aser_household_filtered %>%
+  mutate(
+    PsychologicalImpacted = case_when(
+      PsychologicalImpacted == 1 ~ "Substantially",
+      PsychologicalImpacted == 2 ~ "Somewhat affected",
+      PsychologicalImpacted == 3 ~ "Affected only a bit",
+      PsychologicalImpacted == 4 ~ "Not at all",
+      TRUE ~ "Blank/Not Available"
+    )) %>%
+  mutate(PsychologicalImpacted = factor(PsychologicalImpacted))
+
+aser_household_filtered <- aser_household_filtered %>%
+  mutate(
+    SchoolingAffected = case_when(
+      SchoolingAffected == 1 ~ "Extremely affected",
+      SchoolingAffected == 2 ~ "Moderately affected",
+      SchoolingAffected == 3 ~ "Somewhat affected",
+      SchoolingAffected == 4 ~ "Not at all affected",
+      TRUE ~ "Blank/Not Available"
+    )) %>%
+  mutate(SchoolingAffected = factor(SchoolingAffected))
+
+    
+
+
+```
+
+### Merging the School and Child Datasets (OLD CODE)
+
+```{r}
+# Merging the School and Child Datasets
+
+aser_child_household_merged <- left_join(aser_child_filtered, aser_household_filtered, by = c("HHID")) 
+  glimpse()
+  
+aser_all_merged <- select(aser_child_household_merged, -c("VillageMapSurveyId", "AREA", "DNAME")) %>%
+  left_join(aser_school_filtered, by = c("RNAME")) %>%
+  glimpse()
+
+aser_child_school_merged <- left_join(aser_child_filtered, aser_school_filtered, by = c("AREA", "RNAME")) %>%
+  glimpse()
+
+# Merging the School and Household Datasets
+#aser_school_household_merged <- left_join(aser_school_filtered, aser_household_filtered, by = c("HHID"))
+
+# Merging All Data Sets
+#aser_merged_all <- left_join(aser_child_school_merged, aser_school_household_merged, by = c("AREA", "RNAME", "HHID"))
+```
+
+### Data Visualization
+
+```{r}
+# Types of Schools in Each Region
+library(ggplot2)
+aser_school_child_household_merged_2 %>%
+ggplot(aes(x = C11)) +
+  geom_bar() +
+  coord_flip() +
+  facet_wrap(~RNAME) +
+  labs(title = "Types of Schools in Each Region",
+       x = "Count of Schools",
+       y = "Type of Schools") +
+  theme_minimal()
+```
+
+```{r}
+aser_school_child_household_merged_2 <- aser_school_child_household_merged_2 %>%
+  rename(EducationalStatus = C05) %>%
+  mutate(EducationalStatus = case_when(
+    EducationalStatus == 1 ~ "Never Enrolled",
+    EducationalStatus == 2 ~ "Dropped Out",
+    EducationalStatus == 3 ~ "Currently Enrolled",
+    TRUE ~ "Blank/Not Available"
+  )) %>%
+  mutate(EducationalStatus = factor(EducationalStatus))
+unique(aser_school_child_household_merged_2$C10)
+```
+
+```{r}
+aser_school_child_household_merged_2 <- aser_school_child_household_merged_2 %>%
+  mutate(C10 = recode(C10,
+                      "ECE" = "ECE",
+                      "Nursery" = "ECE",
+                      "KG" = "ECE",
+                      "PG" = "ECE",
+                      "Prep" = "ECE",
+                      "Kachi" = "Informal Education")) %>%
+  mutate(C10 = factor(C10, 
+                      levels = c("Informal Education", "ECE", 
+                                 "1", "2", "3", "4", "5", "6", "7", "8", "9", 
+                                 "10", "11", "12", "13", "14"),
+                      ordered = TRUE)) %>%
+  rename(Grades = C10)
+```
+
+```{r}
+aser_school_child_household_merged_2 <- aser_school_child_household_merged_2 %>%
+  rename(InstitutionType = C11) %>%
+  mutate(InstitutionType = case_when(
+    InstitutionType == 1 ~ "Government",
+    InstitutionType == 2 ~ "Private",
+    InstitutionType == 3 ~ "Madarassah",
+    InstitutionType == 4 ~ "NFE/Other",
+    TRUE ~ "Blank/Not Available"
+  ))
+```
+
+```{r}
+aser_school_child_household_merged_2 <- aser_school_child_household_merged_2 %>%
+  rename(LocalLangReadingLevel = C15) %>%
+  rename(ArithmeticLevel = C19) %>%
+  rename(EnglishReadingLevel = C20) 
+```
+
+```{r}
+aser_school_child_household_merged_2 <- aser_school_child_household_merged_2 %>%
+  rename(TeachersAppointed = S008TA) %>%
+  rename(TeachersPresent = S008TP) %>%
+  rename(SingleOrCoEdSchool = S001) %>%
+    mutate(SingleOrCoEdSchool = case_when(
+    SingleOrCoEdSchool == 1 ~ "Boys and Girls",
+    SingleOrCoEdSchool == 2 ~ "Girls School",
+    SingleOrCoEdSchool == 3 ~ "Boys School",
+    TRUE ~ "Blank/Not Available")) %>%
+  mutate(SingleOrCoEdSchool = factor(SingleOrCoEdSchool))
+```
+
+```{r}
+aser_school_child_household_merged_2 <- aser_school_child_household_merged_2 %>%
+  rename(InstructionMedium = S002) %>%
+  mutate(InstructionMedium = case_when(
+    InstructionMedium == 1 ~ "English Medium",
+    InstructionMedium == 2 ~ "Urdu Medium",
+    InstructionMedium == 3 ~ "Sindhi Medium",
+    InstructionMedium == 4 ~ "Other",
+    TRUE ~ "Blank/Not Available"
+  )) %>%
+  mutate(InstructionMedium = factor(InstructionMedium))
+```
+
+```{r}
+aser_school_child_household_merged_2 <- aser_school_child_household_merged_2 %>%
+  rename(SchoolType = STYPE) %>%
+  mutate(SchoolType = case_when(
+    SchoolType == 1 ~ "Primary",
+    SchoolType == 2 ~ "Middle",
+    SchoolType == 3 ~ "High",
+    SchoolType == 4 ~ "Higher Secondary",
+    SchoolType == 5 ~ "Composite",
+    TRUE ~ "Blank/Not Available"
+  )) %>%
+  mutate(SchoolType = factor(SchoolType))
+```
+
+```{r}
+aser_school_child_household_merged_2 <- aser_school_child_household_merged_2 %>%
+  rename(ChildrenEnrolled = S007E) %>%
+  rename(ChildrenPresent = S007P) 
+```
+
+```{r}
+# Educational Status by Region
+aser_school_child_household_merged_2 %>%
+  ggplot(aes(x = RNAME, fill = EducationalStatus)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Educational Status by Region", x = "Region", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_brewer(palette = "Set1")
+```
+
+```{r}
+# Earning Members by House Type
+aser_school_child_household_merged_2 %>%
+ggplot(aes(x = HouseType, y = EarningMembers)) +
+  geom_boxplot() +
+  labs(title = "Earning Members by House Type", x = "House Type", y = "Earning Members") +
+  theme_minimal()
+```
+```{r}
+aser_school_child_household_merged_2 %>%
+ggplot(aes(x = TeachersAppointed, y = TeachersPresent, color = RNAME)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth() +
+  labs(title = "Teachers Appointed vs. Teachers Present by Region", 
+       x = "Teachers Appointed", y = "Teachers Present") +
+  theme_minimal() 
+```
+
+```{r}
+aser_school_child_household_merged_2 %>%
+ggplot(aes(x = SingleOrCoEdSchool, fill = InstructionMedium)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Single or Co-Education Schools by Medium of Instruction", x = "Single or Co-Education", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+aser_school_child_household_merged_2 %>%
+  select(RNAME, ClimateChange) %>%
+  ggplot(aes(x = RNAME, fill = ClimateChange)) +
+  geom_bar(position = "dodge") +
+  coord_flip() +
+  labs(title = "Climate Change Impact by Region", x = "Region", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+aser_school_child_household_merged_2 %>%
+
+ggplot(aes(x = EarningImpacted, y = EarningMembers)) +
+  geom_boxplot(fill = "lightblue", color = "darkblue") +
+  labs(title = "Distribution of Earning Members by Earning Impacted", 
+       x = "Earning Impacted", 
+       y = "Number of Earning Members") +
+  theme_minimal()
+```
+
+```{r}
+aser_school_child_household_merged_2 %>%
+
+ggplot(aes(x = SchoolingAffected, y = TravelTime)) +
+  geom_boxplot(fill = "lightgreen", color = "darkgreen", outlier.color = "red") +
+  
+  # Adding mean points
+  stat_summary(fun = mean, geom = "point", shape = 23, size = 3, fill = "blue", color = "black") +
+  
+  # Adding mean line
+  stat_summary(fun = mean, geom = "errorbar", width = 0.2, aes(ymin = ..y.., ymax = ..y..), color = "blue", linetype = "dashed") +
+  
+  # Adding median line
+  stat_summary(fun = median, geom = "errorbar", width = 0.2, aes(ymin = ..y.., ymax = ..y..), color = "purple", linetype = "solid") +
+  
+  labs(title = "Distribution of Travel Time by Schooling Affected", 
+       x = "Schooling Affected", 
+       y = "Travel Time (Hours)") +
+  
+  theme_minimal() +
+  
+  # Customize the appearance of text and labels
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r}
+aser_school_child_household_merged_2 %>%
+
+ggplot(aes(x = Grades, fill = EnglishReadingLevel)) +
+  geom_bar(position = "dodge") +
+  labs(title = "English Reading Level by Grade", 
+       x = "Grades", 
+       y = "Count",
+       fill = "English Reading Level") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+```{r}
+aser_school_child_household_merged_2 %>%
+  ggplot(aes(x = HouseholdCounter, y = EarningMembers)) +
+  geom_point()
+```

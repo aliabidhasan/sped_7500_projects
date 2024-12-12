@@ -1,0 +1,835 @@
+---
+title: "Data reduction"
+author: "Crossley"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: yes
+    number_sections: yes
+---
+
+
+
+
+
+```{r}
+rm(list=ls(all=TRUE))
+```
+
+
+Machine learning is divided into two parts 
+
+1. Supervised learning 
+
+  - Labeled data
+  - Regression analyses
+  
+2. Unsupervised learning
+
+  - Raw data without labels
+  - Used to develop insights
+  - Dimension reduction: PCA, EFA, CFA
+  - Cluster analyses
+
+# Dimensionality Reduction
+
+Dimensionality reduction transforms a data set from a high-dimensional space into a low-dimensional space
+
+  - good choice when you suspect there are “too many” variables. 
+  - An excess of variables, usually predictors, can be a problem because it is difficult to understand or visualize data in higher dimensions.
+  - Can help with overfitting model.
+  - Can help reduce multicollinearity.
+
+## Principle Component Analysis versus Exploratory Factor Analysis
+
+There are two common types of dimensionality reduction that are, in practice, very similar.
+
+Principal components analysis
+Exploratory Factor analysis 
+
+![](images/versus.png)
+
+Both analyze groups of variables for the purpose of reducing them into subsets represented by latent constructs
+
+Both reduce variables by combining them.
+
+  - This is in contrast to a cluster analysis which combines observations.
+    - We will learn about this in two weeks
+    
+If error is close to zero, an EFA and a PCA will report similar results
+
+Difference will be reported between the two methods if
+
+1. High error
+2. The ratio of the number of factors to the number of measured variables is low (e.g., three variables for a factor)
+3.  When the communalities in EFA are low 
+
+### EFA
+
+Exploratory factor analysis is a modeling method
+
+- *In practice*: Examine a latent variable related to math knowledge
+
+- Exploratory factor analysis (EFA) derives a mathematical model from which factors are estimated
+  - assumes the existence of **latent factors** underlying the observed data
+    - The researcher should have an idea, ahead of time, what these factors are.
+  - EFA allows an estimate of those underlying factors
+    - identifying and measuring variables that cannot be measured directly
+  - EFA estimates errors
+  - Measured variables are a function of factors
+  
+There is also **Confirmatory Factor Analysis**, which we will not be covering.
+
+    -testing whether a theoretical model of relationships is consistent with a given set of data
+  
+![](images/efa_cfa_compare.png)
+
+### PCA
+
+Principal Component analysis is a descriptive method
+
+- *In practice*: Reduce survey measures into composite components
+
+- Principal components analysis (PCA) merely decomposes the original data into **a small set of composite components** that reflect which linear components exist within the data 
+  - Does not presume the existence of latent variables
+  - Identify variables that are composites of the observed variables
+    - How a particular variable might contribute to that composite/component
+  - Does not estimate error
+    -Retains as much information as possible from the original variables
+  - Components are a function of the measured variables
+
+**Principle Component Analysis**
+
+Purpose
+
+- Identifying the smallest number of linear functions necessary to explain the
+total variance observed for the item set in the correlation matrix
+
+              or
+
+- Identifying the smallest number of components necessary to explain
+as much of the variance as possible
+  - **This is our interest**
+
+Principal component analysis (PCA) is one of the most straightforward methods for reducing the number of columns in a data set
+
+- Relies on linear methods
+- Unsupervised (i.e., does not consider the outcome data).
+- Clusters variables into groups that co-occur allowing for a large number of variables to be reduced into a smaller set of derived variables (i.e., the components) 
+  - These groups are called the components
+  - Component loadings are correlation between variable and component
+    - Determine importance of variable in component loadings based on strength
+
+- Provides overview of data combined into like functions.
+  - Can create new factors/components based on weights of loadings.
+
+**Purposes of Dimensionality Reduction**
+
+- to understand the structure of a set of variables 
+  - pioneers of intelligence such as Spearman and Thurstone used factor analysis to try to understand the structure of the latent variable ‘intelligence’
+
+- to construct measures of an underlying variable
+  - you might design a questionnaire to measure learner motivation
+  - use dimension reduction to reduce a data set to a more manageable size while retaining as much of the original information as possible
+
+**How does it work**
+
+Consider a typical correlational matrix
+
+- The existence of clusters of large correlation coefficients between subsets of variables suggests that those variables could be measuring aspects of the same underlying dimension. 
+  - variables that correlate highly with a group of other variables, but do not correlate with variables outside of that group.
+- These underlying dimensions are known as factors (or components).
+
+![](images/pca.png)
+
+**The Math**
+
+PCA first identifies the linear combination of variables that explains the largest proportion of total variance
+
+That factor is known as the first component. 
+
+For a component with 6 indicators, the linear function takes the form:
+
+𝐶 = 𝑙1𝑖1 + 𝑙2𝑖2 + 𝑙3𝑖3 + 𝑙4𝑖4 + 𝑙5𝑖5 + 𝑙6𝑖6
+
+- C is a component or outcome of the linear function
+- l is an item loading
+- i is an item.
+
+The second component is the linear combination of variables that explains the next largest
+proportion of variance that is not explained by the first component, and so on.
+
+Each component is called an eigenvector
+
+The portion of the total variance explained by each eigenvector is its eigenvalue
+
+
+**Component Scores**
+
+- A component can be described in terms of the variables measured 
+  - And the relative importance of the variables for that component is known as its loading.
+
+- Can be calculated using weighted scores (see above)
+  - Component scores tell us an individual variable's score on a subset of measures. 
+  - Great for overcoming collinearity problems in regression or other analyses
+
+**Stastical Assumptions for PCA**
+
+- At least interval data
+- Normally distributed
+- Multicollinearity
+  - remove correlations that are too high > .80 or .90
+- Use z-scores to help with interpretations if necessary
+  - i.e., if scales are different among variables
+- Have a large enough sample size
+  - At least 10-15 observations per variable
+  - Sample size of at least 300
+
+## Steps in running a PCA
+
+1. Check for multicollinearity between variables
+2. Scale variables
+3. Visualize the data
+4. Bartlett's test including sample size
+5. KMO on the data (look for variables below .5 and remove)
+6. Baseline PCA to check scree plot, SS loadings above 1, and normal distribution of variables
+7. Check that residuals are normally distributed
+8. PCA with selected number of components based on interpretation of scree plot and SS loadings
+9. Interpret components (this is an arbitrary process)
+10. Send component scores to csv
+11. Model data using component scores instead of individual variables
+
+
+### Our Dataset
+
+Let's grab it all up
+
+**We are using a lot of variables to make sure we have components**
+
+- Achievement data (all four variables) for all students
+- Discipline rates for S, E, I, R
+- School funding (state, local, federal)
+- Teacher survey data for the following questions
+  - There is an atmosphere of trust and mutual respect within this school. 
+  - Staff at this school have an effective process for making group decisions to solve problems.
+  - Teachers are encouraged to participate in school leadership roles.
+  - The staff at this school like being here; I would describe us as a satisfied group.
+  - I feel appreciated for the job that I am doing.
+  - I am generally satisfied with being a teacher in this school.
+  - The principal at my school communicates a clear vision for this school.
+  - The staff feels comfortable raising issues and concerns that are important to them with school leaders.
+  - I like the way things are run at this school.
+  - Teachers and parents think of each other as partners in educating children.
+  - Staff at this school work hard to build trusting relationships with parents.
+  - Parents respond to my suggestions for helping their child.
+  - This school effectively handles student discipline and behavioral problems.
+  - Students treat adults with respect at this school.
+  
+Call in the dataframes
+
+```{r}
+
+library(tidyverse)
+
+achieve_tn <- read_csv("tenn_2018_achieve.csv") %>% 
+  select(district_number, school_name, subgroup, overall_subject, percent_on_mastered) %>%
+  filter(subgroup == "All Students") %>% 
+  filter(!is.na(school_name)) %>% 
+  filter(!is.na(percent_on_mastered)) %>% 
+  unite(dis_school, district_number, school_name, sep = "_") %>% 
+  select(-subgroup) %>% 
+  pivot_wider(names_from = overall_subject, values_from = percent_on_mastered) %>% 
+  rename(social_studies = "Social Studies")
+
+funding_df <- read_csv("school_funding.csv")%>% 
+  mutate(across(everything(), ~ifelse(.=="", NA, as.character(.))))%>% #convert empty cells to NA
+  #see https://github.com/lwheinsberg/dbGaPCheckup/pull/1 for previous problems with na_if
+  filter(!is.na(school_name)) %>% #remove all non-schools 
+  unite(dis_school, district_number, school_name, sep = "_") %>%
+  select(1, 7:9) %>% #this is the same as below 
+  select(dis_school, local_funding_percent, federal_funding_percent, state_funding_percent)
+
+funding_df <- read_csv("school_funding.csv")%>% 
+  filter(!is.na(school_name)) %>% #remove all non-schools 
+  unite(dis_school, district_number, school_name, sep = "_") %>%
+  select(1, 7:9)
+
+discipline_df <- read.csv("discipline_tn.csv", header = TRUE) %>% 
+  mutate(across(everything(), ~ifelse(.=="", NA, as.character(.))))%>% #convert empty cells to NA
+  select(district_number, school_name, subgroup, disciplinary_type, percent) %>% 
+  filter(!is.na(school_name)) %>%   
+  filter(subgroup == "All Students") %>% 
+  unite(dis_school, district_number, school_name, sep = "_") %>% 
+  select(-subgroup) %>% 
+  pivot_wider(names_from = disciplinary_type, values_from = percent) #%>%
+
+discipline_df <- read_csv("discipline_tn.csv") %>% 
+  dplyr:: select(district_number, school_name, subgroup, percent, disciplinary_type) %>%
+  mutate(percent = as.numeric(na_if(percent, "*"))) %>% 
+  rename("percent_discipline" = percent) %>% 
+  filter(subgroup == "All Students") %>% 
+  filter(!is.na(school_name)) %>% 
+  filter(!is.na(percent_discipline)) %>% 
+  unite(dis_school, district_number, school_name, sep = "_") %>% 
+  select(-subgroup) %>% 
+  pivot_wider(names_from = disciplinary_type, values_from = percent_discipline) 
+
+
+teacher_survey <- read_csv("Teacher_survey_TN_2018.csv")%>%  
+  filter(Prompt == "There is an atmosphere of trust and mutual respect within this school." | Prompt == "Staff at this school have an effective process for making group decisions to solve problems." | Prompt == "Teachers are encouraged to participate in school leadership roles." | Prompt == "The staff at this school like being here; I would describe us as a satisfied group." | Prompt == "I feel appreciated for the job that I am doing." | Prompt == "I am generally satisfied with being a teacher in this school." | Prompt == "The principal at my school communicates a clear vision for this school." | Prompt == "The staff feels comfortable raising issues and concerns that are important to them with school leaders." | Prompt == "I like the way things are run at this school." | Prompt == "Teachers and parents think of each other as partners in educating children." | Prompt == "Staff at this school work hard to build trusting relationships with parents." | Prompt == "Parents respond to my suggestions for helping their child." | Prompt == "This school effectively handles student discipline and behavioral problems." | Prompt == "Students treat adults with respect at this school.") %>% 
+  mutate(Prompt = recode(Prompt, "There is an atmosphere of trust and mutual respect within this school." = "Trust", "Staff at this school have an effective process for making group decisions to solve problems." = "decison_making", "Teachers are encouraged to participate in school leadership roles." = "Teacher_leaders", "The staff at this school like being here; I would describe us as a satisfied group." = "Teacher_satisfied", "I feel appreciated for the job that I am doing." = "Teacher_appreciation", "I am generally satisfied with being a teacher in this school." = "Teacher_satisfied_2", "The principal at my school communicates a clear vision for this school." = "Principal_vision", "The staff feels comfortable raising issues and concerns that are important to them with school leaders." = "Talk_to_leaders",  "I like the way things are run at this school." = "Like_leadership", "Teachers and parents think of each other as partners in educating children." = "Parent_partners", "Staff at this school work hard to build trusting relationships with parents." = "Trust_parent", "Parents respond to my suggestions for helping their child." = "Parent_respond", "This school effectively handles student discipline and behavioral problems." = "School_discipline", "Students treat adults with respect at this school." = "Student_respect")) %>% 
+  unite(dis_school, DistrictNo, SchoolName, sep = "_") %>% 
+  mutate(overall_agreement = Agree + Strongly_Agree) %>% 
+  select(dis_school, Prompt, overall_agreement) %>% 
+  pivot_wider(names_from = Prompt, values_from = overall_agreement) %>% 
+  unnest() #Warning: Values from `overall_agreement` are not uniquely identified; output will contain list-cols. Use unnest to 
+
+length(unique(teacher_survey$dis_school)) #so, there are three duplicates
+
+teacher_survey %>% 
+  group_by(dis_school) %>% 
+  filter(n()>1)
+
+#330 central office is duplicated... need to remove
+
+teacher_survey <- teacher_survey %>% 
+  filter(!(dis_school == "330_Central Office"))
+
+```
+
+Join databases together
+
+```{r}
+
+pca_tib <- achieve_tn %>% 
+  left_join(funding_df, by = "dis_school") %>% 
+  left_join(discipline_df, by = "dis_school")%>% 
+  left_join(teacher_survey, by = "dis_school")%>% 
+  na.omit() %>% 
+  mutate_at(c(2:25),as.numeric) #if character in columns 2:25, change to numeric
+
+
+glimpse(pca_tib)
+
+write.csv(pca_tib, "pca_data_for_class.csv")
+
+```
+
+
+**The Data**
+
+Now we have a large tibble of 24 variables and ~1,000 observations
+
+- We know some of the data is multicollinear
+- We know some of the data measures similar constructs
+  - standardized tests
+  - teacher survey data
+  - funding
+
+
+### THE PCA
+
+Where the work is actually done.
+
+#### STEP 1: Correlations for Strong Multicollinearity
+
+- Look for correlations > .90
+
+```{r}
+
+pca_tib <- read_csv("pca_data_for_class.csv")
+
+glimpse(pca_tib)
+
+pca_tib_cor <- pca_tib[,2:25] #if calling in .csv, change to pca_tib[,3:26]
+
+corr_mat_pca <- cor(pca_tib_cor)
+
+corr_mat_pca
+#send to a csv file to check out
+
+write.csv(corr_mat_pca, "corr_matrix_for_pca.csv")
+
+#local and state funding are highly correlated
+```
+
+Create new dataframe without state funding
+
+At < .90, it really does not matter which variable you remove. They are measuring the same construct
+
+```{r}
+
+glimpse(pca_tib)
+
+data_pca <- pca_tib[, c(2:7, 9:25)] #c(3:8, 10:26)
+
+glimpse(data_pca)
+```
+
+
+#### STEP 2: Scale all the variables
+
+- PCA is a variance maximizing exercise.
+  - Variables with larger variances will explain the majority of the variances
+    - If data on different scales, the variable with the large scale is likely to have larger variances than variables on smaller scales.
+    - Scale variables so differences in scales is not responsible for explained variance
+
+```{r}
+library(psych)
+library(tidyverse)
+library(caret)
+
+scaled_data_pca <- data_pca %>% 
+  mutate_at(c(1:23), ~(scale(.) %>% as.vector))
+
+glimpse(scaled_data_pca)
+
+psych::describe(scaled_data_pca) #gives you a lot of descriptives quickly
+
+
+```
+
+##### STEP 3: Visualizing PCA
+
+This is just to understand the underlying data. 
+
+Using a variable correlation plot (or a correlation circle)
+
+  - The correlation between a variable and a principal component (PC) is used as the coordinates of the variable on the PC.
+
+**This is not the final PCA**
+
+```{r}
+#install.packages("factoextra")
+
+library(factoextra) #extract and visualize the output of multivariate data analyses, including 'PCA'
+
+#line below runs a simple PCA with a component for each variable. 
+#the most variance will be explained in component 1 and 2
+viz_pca <- prcomp(scaled_data_pca, center = TRUE,scale. = TRUE)
+
+
+#Graph of variables. Positive correlated variables point to the same side of the plot. Negative correlated variables point to opposite sides of the graph.
+
+fviz_pca_var(viz_pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE #Avoid overlapping text if possible 
+             )
+
+```
+
+How to interpret this variable correlation plot
+
+- Positively correlated variables are grouped together.
+- Negatively correlated variables are positioned on opposite sides of the plot origin (opposed quadrants)
+  - Look at differences between local and federal funding percent
+- The distance between variables and the origin measures the quality of the variables on the factor map. 
+ - Variables that are away from the origin are well represented on the factor map.
+ - This is represented by the color gradient. 
+  - The darker the color, the better the representation.
+
+Below the x axis is where component 1 features will load (component 2 above the x axis) 
+
+
+Through visualization, it seems that the following are loading together
+
+1. Standardized test scores
+2. Discipline
+3. Teachers and leadership
+4. Parents
+
+
+#### STEP 4: Bartlett's test
+
+If significant, the R-matrix is not an identity matrix
+
+  - A square matrix where all the diagonal elements are one and rest are zero
+
+![ID Matrix](images/ID_matrix.png)
+
+- There are some relationships between the variables in the analysis
+  - i.e., you can conduct a PCA
+- if not significant, the variables are not related and a PCA should not be run.
+
+
+```{r}
+cortest.bartlett(scaled_data_pca, 978) #978 equals sample size
+
+# p value below .05, so it is not an identity matrix
+```
+
+#### STEP 5: KMO
+
+Measure of Sampling Adequacy (MSA) of factor analytic data matrices called the Kaiser-Meyer-Olkin (KMO) index.
+
+The test measures sampling adequacy for each variable in the model and for the complete model.
+
+The statistic is a measure of the proportion of variance among variables that might be common variance. 
+ 
+The higher the proportion, the more suited your data is to Factor Analysis.
+
+- Kaiser (1974) recommends a bare minimum of .5
+- values between .5 and .7 are mediocre
+- values between .7 and .8 are good
+- values between .8 and .9 are great
+- values above .9 are superb
+
+
+```{r}
+
+KMO(scaled_data_pca)
+#all data above .50 and overall MSA is strong
+#if not, you would need to remove variables with low MSA one at a time
+
+
+```
+
+
+
+#### STEP 6: Baseline PCA to select number of components
+
+There are two approaches
+
+1. a priori criterion (Hair, Anderson, Tatham, & Black, 1992) 
+  - Specifying before an analysis a certain number of components that should be extracted based on theory or previous research
+2. Decision rules
+  - Kaiser's stopping rule
+  - Scree plot
+
+At this step, **you** select the number of components in your analysis.
+
+- Using sum of square (SS) loadings (Kaiser's rule)
+
+  -all eigenvectors with an eigenvalue of 1.0 or greater are extracted from the data and retained as part of the solution (not arbitrary)
+
+- And/or a scree plot (arbitrary)
+
+  - A scree plot will visually depict a quick decline in eigenvalues followed by a series of less dramatic decreases. 
+  - The eigenvector which represents the transition between the two trends (the elbow) and all successive eigenvectors are dropped (Gorsuch, 1983).
+    - The elbow represents a point of inflection
+  
+
+![](images/scree.png)
+
+```{r}
+
+#run a base pca with as many components as possible (here 23 because you have 23 variables)
+
+pca_base <- principal(scaled_data_pca, nfactors = 23, rotate = "none")
+
+pca_base #results
+
+#SS The eigenvalues associated with each factor represent the variance explained by that particular linear component. 
+#R calls these SS loadings (sums of squared loadings), because they are the sum of the squared loadings.
+
+#Proportion of var (ss loading divided by sample size)
+
+#How many components to extract? The number of SS loadings greater than 1 (Kaiser's criterion).
+
+#Potentialy 5 here.
+
+#scree plot using eigen values stored in pca_1$values
+plot(pca_base$values, type = "b")
+
+#plots the eigenvalues (y) against the factor number (x)
+#type = 'b' both gives you a line and points on the same graph
+
+#indicates 3-5 variables here
+
+#Let's pick 5
+
+```
+
+#### STEP 7: Check that residuals are normally distributed
+
+Will use factor.residuals
+
+  - Requires a correlation matrix and a factor loading matrix times. 
+  - Finds the residuals of the original minus the factor loading matrix. 
+  - This is not the final PCA. 
+    - Simple PCA without rotation
+
+```{r}
+
+pca_resid <- principal(scaled_data_pca, nfactors = 5, rotate = "none")
+pca_resid #results. 5 looks good. But this is not important right now.
+
+#residuals
+#require correlation matrix for final data
+corMatrix<-cor(scaled_data_pca)
+#corMatrix
+
+#next,create an object from the correlation matrix and the pca loading. Call it residuals. It will contain the factor residuals
+residuals<-factor.residuals(corMatrix, pca_resid$loadings)
+
+#call a histogram to check residuals
+hist(residuals) #are the residuals normally distributed? They look okay. That is good
+
+
+```
+
+
+#### STEP 8: Informed PCA with specific number of components
+
+Let's try 5 components.
+
+  - Remember, this is somewhat arbitrary. We could try 3 or 4 components.
+
+We are also going to rotate the data
+
+**Rotation**
+
+Rotation is a mathematical manipulation meant to minimize the factor loadings close to 0 and maximize the loadings that are close to 1.0 
+  - Simplify interpretability of factors without changing the solution (Brown, 2006)
+
+A factor is a classification axis along which variables can be plotted
+
+- factor rotation effectively rotates these factor axes such that variables are loaded maximally on only one factor.
+
+![](images/rotation.png)
+
+
+**orthogonal rotation**
+
+- constrains factors to be independent of each other
+  - see left plot above where components rotated so they land on different quadrants
+  - underlying factors are assumed to be independent, and the factor loading is the correlation between the factor and the variable, but is also the regression coefficient.
+  - Use Varimax rotation
+
+**oblique rotation**
+
+- factors are assumed to be related or correlated to each other.
+  - allows factors to be correlated
+    - see right plot above where components rotated so they land on same quadrant
+- resulting correlations between variables and factors will differ from the corresponding regression coefficients. 
+  - Use promax rotation
+
+Our data is probably independent
+
+  -so, promax
+
+**Loadings?**
+
+How many/which items to include on each component?
+
+- generally determined by the factor loading coefficient
+  - describes the relationship (correlation) between each item and the eigenvector
+    - the coefficient can be used to calculate r2 for the item to determine the portion of variance that is shared by the item and the component
+  - loadings may be positive or negative, and can have absolute values that range from 0.00 to 1.00
+  - often rely on a general rule of thumb that the absolute value of a factor loading should be ≥ .30 (Grimm & Yarnold, 1995) to be included in component
+    - Based on the notion that a .3 correlation is significant
+    - Some suggest .5, because larger sample sizes will reach significance at lower r values (Stevens, 1986)
+
+
+```{r}
+
+#rotation. Since factors should be related, use oblique technique (promax), if unrelated, use varimax
+pca_final <- principal(scaled_data_pca, nfactors = 5, rotate = "promax")
+pca_final #results. 
+
+#let's make the results easier to read. Include loadings over .3 (think of medium correlation) and sort them
+
+print.psych(pca_final, cut = 0.3, sort = TRUE)
+
+```
+
+Note, we set a cut-off here of .3. What does that mean?
+
+
+Plot out results
+
+```{r}
+
+plot(pca_final)
+
+#note, the plot function only allows 4 colors, but it does allow for different shapes
+#The far right on each box shows where the component's observations cluster compared to each other cluster
+#here
+#component 1 is black
+#component 2 is blue
+#component 4 is red
+#component 5 is grey
+#component 3 is black again but a diamond
+
+#looking for separation among the components
+
+fa.diagram(pca_final)
+
+
+```
+
+**The Most Important Task is Naming the Components!!!**
+
+This is very arbitrary
+
+Component 1: School_Atmosphere
+
+Component 2: School_academics
+
+Component 3: Parent_involvement
+
+Component 4: School_discipline
+
+Component 5: School_funding
+
+#### STEP 9: Collect factor scores
+
+Get the factor scores for each observation
+
+Rename columns
+
+Combine dataframes
+
+Save for later
+
+```{r}
+
+#we need the pca scores
+pca_final_scores <- as.data.frame(pca_final$scores) #scores for each text on each factor. You can use these in subsequent analyses. Lot's of them though
+head(pca_final_scores)
+
+#rename columns
+pca_final_scores <- pca_final_scores %>% 
+  rename(School_atmosphere = RC1, School_academics = RC2, Parent_involvement = RC3, School_discipline = RC4, School_funding = RC5)
+
+#combine this dataframe with earlier dataframe (pca_tib)
+
+str(pca_tib)
+
+final_data <- cbind(pca_tib, pca_final_scores)
+str(final_data)
+
+
+write.csv(pca_final_scores,"pca_scores_final_df.csv", row.names=FALSE)
+
+
+```
+
+#### STEP 10: Model data as necessary
+
+Here you would use the new combined variable for standardized test scores as the outcome variable and the other components as predictors in a regression model.
+
+**Steps**
+
+1. Select the outcome variable (School_academics)
+2. Run a regression model using
+  - correlations for multicollinearity
+  - 10 fold cross-validation
+  - stepwise selection
+3. Visualize output
+
+## Your Turn
+
+This data is from https://collegescorecard.ed.gov/data/
+
+Data = earnings_uni.csv
+
+RQ: Can a college student's earnings 10 years after graduation be predicted by variables related to
+
+  - University entrance variables
+  - Percentage of science degrees conferred
+  - Tuition
+  - School expenditures
+  - Pell grants and federal loans
+  - Graduation rates
+  - Income level of student families
+
+
+Outcome variable is median earnings after 10 years of college.
+
+We include these variables
+
+**OUTCOME**
+
+source: MD_EARN_WNE_P10
+    description: Median earnings of students working and not enrolled 10 years after entry
+
+**PREDICTORS**
+
+source: INSTNM
+    Institution
+
+source: PREDDEG
+      Predominant undergraduate degree awarded
+       0 Not classified
+       1 Predominantly certificate-degree granting
+       2 Predominantly associate's-degree granting
+       3 Predominantly bachelor's-degree granting #Keep 3
+       4 Entirely graduate-degree granting
+
+source: ADM_RATE
+    description: Admission rate
+  
+source: SAT_AVG
+    description: Average SAT equivalent score of students admitted
+
+source: PCIP01
+    description: Percentage of degrees awarded in Agriculture, Agriculture Operations, And Related Sciences.
+
+source: PCIP11
+    description: Percentage of degrees awarded in Computer And Information Sciences And Support Services.
+
+source: PCIP14
+    description: Percentage of degrees awarded in Engineering.
+
+source: PCIP26
+    description: Percentage of degrees awarded in Biological And Biomedical Sciences.
+
+source: PCIP27
+    description: Percentage of degrees awarded in Mathematics And Statistics.
+
+source: PCIP40
+    description: Percentage of degrees awarded in Physical Sciences.
+
+source: TUITIONFEE_IN
+    description: In-state tuition and fees
+
+source: TUITIONFEE_OUT
+    description: Out-of-state tuition and fees
+
+source: INEXPFTE
+    description: Instructional expenditures per full-time equivalent student
+
+source: AVGFACSAL
+    description: Average faculty salary
+
+source: PFTFAC
+    description: Proportion of faculty that is full-time
+
+source: PCTPELL
+    description: Percentage of undergraduates who receive a Pell Grant
+
+source: C150_4
+    description: Completion rate for first-time, full-time students at four-year institutions 
+
+source: PCTFLOAN
+    description: Percent of all undergraduate students receiving a federal student loan
+
+source: DEP_INC_PCT_M1
+    description: Dependent students with family incomes between $30,001-$48,000 in nominal dollars
+
+source: DEP_INC_PCT_M2
+    description: Dependent students with family incomes between $48,001-$75,000 in nominal dollars  
+    
+source: DEP_INC_PCT_H1
+    description: Dependent students with family incomes between $75,001-$110,000 in nominal dollars
+
+source: DEP_INC_PCT_H2
+    description: Dependent students with family incomes between $110,001+ in nominal dollars
+
+**Important Note**
+
+The actual data frame is 250MB. 
+
+Downloading the data takes way too much time, so I have cleaned it up and shared with you
+
+  - earnings_uni.csv
+
+
+
+
+
+
+
+

@@ -1,0 +1,621 @@
+---
+title: 'A Cluster Analysis of Rural Pakistani Households: Socioeconomic, Climate Change,
+  and Academic Achievement Factors'
+author: "Ali Abid"
+date: "2024-12-06"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction and Situational Context
+
+Despite being the fifth most populous country in the world, Pakistan is only able to spend as much as 1.7 percent of its GDP on education (Abbasi, 2023). The tumultuous domestic political climate, in conjunction with the global geopolitical landscape, has undeniably resulted in a series of macroeconomic crises within the nation. These crises have unfortunately led to widespread inflation, a rise in poverty, and a profound literacy crisis that poses significant challenges for future generations. A sizable children population (around 26 million) remains out of school (Haider, 2024) which can have devastating impact on the opportunities of the country to grow out of these crises.
+
+# Purpose
+
+The primary objective of this research project is to classify rural households across 151 surveyed districts of Pakistan into distinct clusters based on socioeconomic, climate change, and academic achievement factors. This clustering approach is instrumental in uncovering patterns and relationships within the data that may not be immediately apparent. Hence, it will help us first, discarding the apparent binary of rich versus poor households, and second, understanding the nuanced differences between households that may have been impacted by climate change and those that have not, and how it influences their decision-making for schooling.
+
+By employing this technique, policymakers can gain nuanced insights into how rural households perceive climate change information, how climate change impacts influence educational enrollment decisions, and how internet availability correlates with socioeconomic status. The resulting clusters will provide a detailed understanding of various household types and their characteristics, informing policy decisions and interventions aimed at enhancing educational outcomes and addressing the challenges faced by rural households in Pakistan.
+
+# Data
+
+The two datasets (*child*, and *household*) utilized in this project are from the ASER 2023 rural dataset, a household survey conducted in Pakistan to assess the learning levels of children and the current socioeconomic status of the household that they belong to. The survey encompasses a stratified population of 89,551 rural households, across 4,381 villages in 151 rural districts in Pakistan.
+
+# Data Description
+
+-   **HouseholdCounter**: Number of people in the household
+
+-   **EarningMembers**:Number of earning members in the household
+
+-   **TravelTime**:Time taken to travel to school
+
+-   **Car**: Number of cars in the household
+
+-   **MotorCycle**: Number of motorcycles in the household
+
+-   **ClimateChange**: Whether the household has been impacted by climate change and to which severity on a scale of 1-4
+
+-   **IsInternetAvailable**: Binary variable for understanding whether the household has internet facility or not.
+
+    -   1\. Yes 0. No
+
+-   **FloodImpacted**: Whether the household has been impacted by floods and to which severity on a scale of 1-3
+
+    -   1.Yes, significantly 2. Yes, moderately 3. No, not affected
+
+-   **EarningImpacted**: Whether the household has been impacted by loss of earnings due to climate change and to which severity
+
+    -   1.Less than 10% 2. btw 11%-25% 3. btw 26%-50% 4. More than 50% 5. No affect
+
+-   **PsychologicalImpacted**: Whether the household has been impacted by psychological distress due to climate change and to which severity on a scale of 1-4
+
+    -   1\. Substantially 2. Somewhat affected 3. Affected only a bit 4. Not at all
+
+-   **SchoolingAffected**: Whether the household reports that the student's schooling has been impacted due to climate change and to which severity on a scale of 1-4
+
+    -   1\. Extremely affected 2. Moderately affected 3. Somewhat affected 4. Not at all
+
+-   **Institution Type**: The type of institution that the student is enrolled in.
+
+    -   1\. Government
+    -   2\. Private
+    -   3\. Madrassah
+    -   4\. NFE (Non-Formal Education) / Other
+
+-   **LocalLangReadingLevel**: The local language reading level of the student tested
+
+    -   1\. Beginner/Nothing
+
+    -   2\. Letters
+
+    -   3\. Words
+
+    -   4\. Sentences
+
+    -   5\. Story
+
+-   **ArithmeticLevel**: The arithmetic level of the student tested
+
+    -   1\. Beginner/Nothing
+
+    -   2\. Recognition of 1-9
+
+    -   3\. Recognition of 10-99
+
+    -   4\. Recognition of 100-200
+
+    -   5\. Subtraction 2-digit
+
+    -   6\. Subtraction 4-digit
+
+    -   7\. Division
+
+-   **EnglishReadingLevel**: The English reading level of the student tested
+
+    -   1\. Beginner/Nothing
+
+    -   2\. Capital Letters
+
+    -   3\. Small letters
+
+    -   4\. Words
+
+    -   5\. Sentences
+
+# Research Questions
+
+-   What distinct clusters of rural households can be identified in Pakistan based on socioeconomic, climate change, and academic achievement factors?
+-   How do these clusters differ in terms of household access to Internet and the types of institutions that the students are enrolled in?
+
+# Analysis
+
+## Required Libraries
+
+Loading the required packages
+
+```{r}
+library(tidyverse)
+library(readr)
+```
+
+## Load the data
+
+Loading the two datasets into RStudio for further analysis.
+
+```{r}
+# Load the data
+aser_child <- read_csv("ITAASER2023Child.csv")
+aser_household <- read_csv("ITAASER2023Household.csv") %>% 
+  rename(HHID = HouseholdId) # Renaming the HouseholdId column to HHID for merging with the Child Dataset
+```
+
+## Data Wrangling
+
+Merging the two datasets and selecting the required columns for further analysis. The variables are renamed for additional clarity.
+
+```{r}
+# Merging the two datasets
+aser_child_household_data <- aser_child %>% 
+  left_join(aser_household, by = "HHID")
+  
+aser_child_household_data <- aser_child_household_data %>% 
+  select(
+    #Identifier
+    Id,
+    
+    # Household Characteristics
+    HouseholdCounter, EarningMembers, Car, MotorCycle,
+    
+    # Time to school
+    TravelTime,
+    
+    # Climate Change Impact
+    ClimateChange, FloodImpacted, EarningImpacted, PsychologicalImpacted, SchoolingAffected,
+    
+    # Socioeconomic Factor
+    IsInternetAvailable,
+    
+    # School Characteristics
+    C11,
+
+    # Child Characteristics 
+    C15, C19, C20
+  ) %>%
+  rename(
+    
+    # Renaming Variables for Readability 
+    InstitutionType = C11, LocalLangReadingLevel = C15, ArithmeticLevel = C19, EnglishReadingLevel = C20
+  
+  )
+
+```
+
+## Data Cleaning
+
+The dataset is cleaned by removing rows with missing values and changing column types to numeric for further analysis.
+
+```{r}
+# Removing the rows with missing values
+aser_child_household_tib <- aser_child_household_data %>%
+  na.omit() %>% #get rid of rows with NAs
+  mutate_at(c(1:16),as.numeric) #change all columns to numeric
+  #mutate(GeneralKnolwedge = as.factor(GeneralKnolwedge))  #change GK Score to factor
+  #mutate_at(c(1:12), ~(scale(.) %>% as.vector))
+  #scale all variables so mean is zero and values are standardized to SD from zero
+  #as.vector ensures columns are vectors
+
+library(psych) # Loading the psych package
+
+psych::describe(aser_child_household_tib) #gives you a lot of descriptives quickly
+
+# There seems to be an outlier values in HouseholdCounter and EarningMembers, which needs investigation.
+
+```
+
+The boxplot is used to identify and remove an outlier value in the *HouseholdCounter* and *EarningMembers* variables.
+
+```{r}
+boxplot(aser_child_household_tib$HouseholdCounter, 
+        main = "Boxplot of HouseholdCounter", 
+        xlab = "HouseholdCounter")
+
+boxplot(aser_child_household_tib$EarningMembers, 
+        main = "Boxplot of EarningMembers", 
+        xlab = "EarningMembers")
+
+# Let's just try to find out which is the outlier value
+
+max(aser_child_household_tib$HouseholdCounter)
+max(aser_child_household_tib$EarningMembers)
+
+# Fairly assuming that the household and earning members cannot be more than 30, we will remove the outlier value by filtering out using this criteria.
+
+aser_child_household_tib <- aser_child_household_tib %>%
+  filter(HouseholdCounter < 30) %>% # Removing the outlier value
+  filter(EarningMembers < 30) # Removing the outlier value
+
+# Checking the boxplot again to see if the outlier has been removed
+
+boxplot(aser_child_household_tib$HouseholdCounter, 
+        main = "Boxplot of HouseholdCounter", 
+        xlab = "HouseholdCounter")
+
+boxplot(aser_child_household_tib$EarningMembers, 
+        main = "Boxplot of EarningMembers", 
+        xlab = "EarningMembers")
+
+```
+
+Final check for NA values in the dataset.
+
+```{r}
+aser_child_household_tib %>%
+  summarize(total_na = sum(across(everything(), is.na))) # O NA values found in the dataset
+
+# Making a new tibble with the columns that will be used for clustering analysis.
+
+aser_child_household_data_excluded <- aser_child_household_tib %>%
+  select(-c(Id, IsInternetAvailable, InstitutionType)) # Excluding the columns for further analysis, we will get back to them later
+```
+
+## Multicollinearity Check
+
+Checking for multicollinearity between the variables using the correlation matrix and the correlation plot.
+
+```{r}
+
+# Checking for multicollinearity between the variables using the correlation matrix and the correlation plot. Setting the threshold for multicollinearity at r greater than .899
+
+corr_aser_cluster <- round(cor(aser_child_household_data_excluded), 2)
+
+corr_aser_cluster
+
+corrplot::corrplot(corr_aser_cluster, method = "shade", order = "hclust")
+
+# Setting r > .899 as the threshold for multicollinearity. Hence, not removing any variables as they do not meet the threshold.
+
+```
+
+The variables `LocalLangReadingLevel`, `EnglishReadingLevel` and `ArithmeticLevel` are highly correlated but not meeting the threshold r greater than .899 for removal.
+
+## Scale the data
+
+Scaling the variables is important for cluster analysis to ensure that all variables are on the same scale meaning the mean is 0 and the standard deviation is 1.
+
+```{r}
+#scale the variables (important for cluster analysis)
+
+aser_child_household_tib_scaled <- aser_child_household_data_excluded %>%
+  mutate_at(c(1:13), ~(scale(.) %>% as.vector))
+
+glimpse(aser_child_household_tib_scaled)
+
+psych::describe(aser_child_household_tib_scaled) # All variables are now scaled with mean 0 and SD 1
+```
+
+## Distance Matrix
+
+The distance matrix is important in cluster analysis because it helps us measure how similar or different data points are from each other.
+
+The distance matrix is calculated using the `daisy` function from the `cluster` package. The dissimilarity matrix is visualized using the `fviz_dist` function from the `factoextra` package.
+
+```{r, echo=TRUE, results='hide'}
+library(cluster)
+library(factoextra)
+
+#Using the daisy function to calculate the dissimilarity matrix
+
+data_daisy <- daisy(aser_child_household_tib_scaled, metric = "euclidean")
+
+round(as.matrix(data_daisy), 2) #rounding to 2 decimal places
+
+#eucl_dist <- get_dist(aser_child_household_tib_scaled, method = "euclidean")
+#head(round(as.matrix(eucl_dist), 2))
+
+```
+
+```{r}
+# Visualize the dissimilarity matrix (which will be a mess with  many observations)
+
+fviz_dist(data_daisy, lab_size = 2) #set label size to 2 so it's readable
+
+# The red color indicates high similarity
+# The blue color indicates low similarity
+# The color level is proportional to the value of dissimilarity between observations (pure red represents zero and pure blue represents one)
+# There are some clusters in there
+
+```
+
+## Partitioning Clustering
+
+Partitioning clustering is a type of clustering that divides the data into non-overlapping subsets. The most popular partitioning clustering method is K-means clustering which we will be using for this project. This is because K-means clustering can handle larger datasets.
+
+```{r}
+library(ggplot2) #for plotting
+library(ggdendro) #for dendrograms
+library(cluster) #for clustering
+library(NbClust) #for finding the optimal number of clusters
+
+# K-Means Clustering
+
+set.seed(1234)
+
+num_clust_k_mean <- NbClust(aser_child_household_tib_scaled, min.nc=2, max.nc=15, method="kmeans") # 2-15 clusters, which is convention
+
+#According to the majority rule, the best number of clusters is  3 
+
+num_clust_k_mean$Best.nc #what are the best number of clusters according to results
+
+#show this in a histogram...
+hist(num_clust_k_mean$Best.nc[1,],breaks = 15)  #3 seems to be the best number of clusters
+
+# Final cluster
+set.seed(1234)
+
+final_km <- kmeans(aser_child_household_tib_scaled, 3, nstart=25)
+
+final_km$size #how many observations in each cluster?
+
+final_km$centers # coordinates of the final cluster centers (the final locations of the cluster centroids)
+
+#get a cluster plot
+
+fviz_cluster(final_km, data=aser_child_household_tib_scaled)
+```
+
+## Analyzing The Clusters
+
+The next step is to analyze the clusters based on the mean values of the variables in each cluster. This will help us understand the characteristics of each cluster and how they differ from each other. Note that while our original dataset contains a mix of continuous and ordinal variables, our interpretation of the clusters will be based on the mean values of these variables that will still be informative.
+
+We begin by adding the cluster assignment to the original dataset.
+
+```{r}
+
+# Adding the cluster assignment to the original dataset
+
+final_km_clusters <- final_km$cluster
+
+final_km_clusters <- as.data.frame(final_km_clusters) %>%
+  rename(cluster = final_km_clusters)
+
+aser_child_household_tib$cluster <- final_km$cluster
+
+```
+
+Creating a new column to see the sample size of each cluster. We find the following.
+
+| Cluster   | Count |
+|-----------|------:|
+| Cluster 1 |   691 |
+| Cluster 2 |   714 |
+| Cluster 3 |  1049 |
+
+Across all the variables, we are summarizing the characteristics of variables by mean only.
+
+```{r}
+# Analyzing the clusters based on the mean values of the variables in each cluster
+
+aser_child_household_tib_test <- aser_child_household_tib %>%
+  group_by(cluster) %>%
+  mutate(sample_size = n()) %>%
+  summarise(across(-c(IsInternetAvailable, InstitutionType, sample_size), ~ mean(.)),
+              sample_size = mean(sample_size))
+
+# Printing the output of the first analysis tibble.
+
+head(aser_child_household_tib_test)
+
+```
+
+Making a second tibble to provide results of cluster based count and proportion for our grouping variables: IsInternetAvailable and InstitutionType to see how they differentiate across the three clusters.
+
+```{r}
+
+# Making a second tibble to provide results of cluster based count and proportion for our grouping variables: IsInternetAvailable and InstitutionType to see how they differentiate across the three clusters.
+
+aser_child_household_tib_test_2 <- aser_child_household_tib %>%
+  mutate(IsInternetAvailable = factor(IsInternetAvailable, levels = c(0, 1), labels = c("No", "Yes")),
+         InstitutionType = factor(InstitutionType, levels = c(1, 2, 3, 4), labels = c("Government", "Private", "Madrassah", "NFE/Other"))) %>%
+  group_by(cluster, IsInternetAvailable, InstitutionType) %>%
+  summarize(count = n()) %>%
+  mutate(proportion = count / sum(count)) %>%
+  ungroup()
+
+
+print(aser_child_household_tib_test_2)
+
+```
+
+## Interpretation of Clusters
+
+The clusters are interpreted based on the mean values of the variables in each cluster.
+
+Variables such as **Climate Change** (whether the household reports being informed about climate change or not) and **Schooling Affected** (whether the household reports schooling being affected during the survey year due to environmental factors) require inverse interpretation. For example, a **higher** mean score for 'Climate Change' within a cluster indicates lower reported understanding of climate-related challenges, while a **lower** score for 'Schooling Affected' corresponds to a higher extent of educational disruption.
+
+For **FloodImpacted** (whether the household reports being impacted during the 2022-23 floods and to what extent), **lower** mean scores indicate **significant** impact from natural disasters and vice versa.
+
+For **EarningImpacted** (whether the household reports their earning being impacted during the 2022-23 floods and to what extent), **lower** mean scores indicate that the cluster experienced **minor** earnings impact and vice versa.
+
+For **PsychologicalImpact** (whether the household reports being psychologically impacted during the 2022-23 floods and to what extent), **lower** mean scores indicate **substantial** psychological impact from natural disasters and vice versa.
+
+The variables related to academic achievement: **LocalLangReadingLevel**, **ArithmeticLevel**, **EnglishReadingLevel** can be interpreted as lower mean score indicating low proficiency and higher mean score indicating higher proficiency.
+
+The variables related to **HouseholdCounter**, **EarningMembers**, **Car**, **Motorcycle**, and **TravelTime** are continuous and hence can be interpreted at face value.
+
+#### Cluster 1: Low Socioeconomic Status, Climate-Conscious, Significantly Impacted, Moderate Academic Achievement
+
+Cluster 1 represents a group that is aware of and significantly affected by climate change, particularly floods. They experience educational disruption and psychological impacts. Despite these challenges, they demonstrate moderate academic achievement. This group might have limited resources, as indicated by the lower number of earning members and car ownership. Their relatively shorter travel time to school could be a contributing factor to their moderate academic performance despite the climate-related challenges.
+
+#### Cluster 2: Moderate Socioeconomic Status, Lower Climate Change Awareness, Moderately Impacted, Low Academic Achievement
+
+Cluster 2 exhibits lower awareness of climate change and experiences a lower impact from floods compared to Cluster 1. They also report less disruption to earnings, education, and psychological well-being due to environmental factors. However, this cluster has the lowest academic achievement across all three subjects. This group might have slightly more resources than Cluster 1, but their academic performance is notably poor.
+
+#### Cluster 3: High Socioeconomic Status, Lower Climate Change Awareness, Moderately Impacted, High Academic Achievement
+
+Cluster 3 represents a group with lower reported understanding of climate change but also experiences a lower impact from floods and other environmental factors compared to Cluster 1. They have the highest academic achievement across all subjects, despite having the longest travel time to school. This cluster appears to be the most well-off in terms of household size, earning members, and asset ownership (cars and motorcycles).
+
+## Visualizations of Clusters
+
+### Internet Availability Across the Clusters (Frequency)
+
+The following bar plot shows the distribution of households with and without internet availability across the three clusters. Cluster 3 has the highest proportion of households with internet access, followed by Cluster 2 and Cluster 1. This suggests that internet access is predominant in households with higher socioeconomic status and there may be an underlying pattern resulting in higher academic achievement for the students in the said households compared to the households with no access.
+
+```{r}
+# Analyzing The Clusters Based On IsInternetAvailable
+
+ggplot(aser_child_household_tib %>%
+         group_by(cluster, IsInternetAvailable) %>%
+         summarise(sample_size = n()),
+       aes(x = factor(cluster), y = sample_size, fill = factor(IsInternetAvailable))) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black") +
+  scale_fill_manual(values = c("0" = "#FF9999", "1" = "#99CCFF"),
+                    name = "Internet Available",
+                    labels = c("No", "Yes")) +
+  labs(
+    title = "Cluster Analysis Based on Internet Availability",
+    subtitle = "Comparison of Internet availability across clusters",
+    x = "Cluster",
+    y = "Cluster Size",
+    caption = "Data Source: aser_child_household_tib"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "top"
+  ) +
+  geom_text(aes(label = sample_size), 
+            position = position_dodge(width = 0.8), 
+            vjust = -0.5, size = 4, color = "black")
+
+```
+
+### Types of School Across the Clusters (Frequency)
+
+The following bar plot shows the distribution of different types of institutions that students are enrolled in across the three clusters. Cluster 3 has the highest proportion of students enrolled in private institutions, followed by Cluster 2 and Cluster 1. This suggests that students from households with higher socioeconomic status are more likely to attend private schools, which may contribute to their higher academic achievement compared to students in government or other types of institutions.
+
+```{r}
+# Analyzing The Clusters Based On InstitutionType
+
+ggplot(aser_child_household_tib %>%
+         group_by(cluster, InstitutionType) %>%
+         summarise(sample_size = n()),
+       aes(x = factor(cluster), y = sample_size, fill = factor(InstitutionType))) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black") +
+  scale_fill_manual(values = c("1" = "#FF9999", "2" = "#99CCFF", "3" = "#FFCC99", "4" = "#99FF99"),
+                    name = "Types of Institutions",
+                    labels = c("Government", "Private", "Madrassah", "Other")) +
+  labs(
+    title = "Cluster Analysis Based on Type of Institution",
+    subtitle = "Comparison of Institutions across clusters",
+    x = "Cluster",
+    y = "Cluster Size",
+    caption = "Data Source: aser_child_household_tib"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "top"
+  ) +
+  geom_text(aes(label = sample_size), 
+            position = position_dodge(width = 0.8), 
+            vjust = -0.5, size = 4, color = "black")
+
+```
+
+### Internet Availability Across the Clusters (Percentage)
+
+```{r}
+# Calculate proportions within each cluster
+proportions_df <- aser_child_household_tib %>%
+  group_by(cluster, IsInternetAvailable) %>%
+  summarise(sample_size = n()) %>%
+  group_by(cluster) %>%
+  mutate(proportion = (sample_size / sum(sample_size)) * 100)
+
+# Plot the proportions
+ggplot(proportions_df, 
+       aes(x = factor(cluster), y = proportion, fill = factor(IsInternetAvailable))) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black") +
+  scale_fill_manual(values = c("0" = "#FF9999", "1" = "#99CCFF"),
+                       name = "Internet Available",
+                       labels = c("No", "Yes")) +
+  labs(
+    title = "Cluster Analysis Based on Internet Availability",
+    subtitle = "Comparison of Internet availability across clusters",
+    x = "Cluster",
+    y = "Proportion of Households (%)",
+    caption = "Data Source: aser_child_household_tib"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "top"
+  ) +
+  geom_text(aes(label = paste0(round(proportion, 1), "%")), 
+              position = position_dodge(width = 0.8), 
+              vjust = -0.5, size = 4, color = "black")
+```
+
+### Types of School Across the Clusters (Percentage)
+
+```{r}
+# Calculate proportions within each cluster
+proportions_df_in <- aser_child_household_tib %>%
+  group_by(cluster, InstitutionType) %>%
+  summarise(sample_size = n()) %>%
+  group_by(cluster) %>%
+  mutate(proportion = (sample_size / sum(sample_size)) * 100)
+
+# Plot the proportions
+ggplot(proportions_df_in, 
+       aes(x = factor(cluster), y = proportion, fill = factor(InstitutionType))) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), color = "black") +
+  scale_fill_manual(values = c("1" = "#FF9999", "2" = "#99CCFF", "3" = "#FFCC99", "4" = "#99FF99"),
+                       name = "Types of Institutions",
+                       labels = c("Government", "Private", "Madrassah", "Other")) +
+  labs(
+    title = "Cluster Analysis Based on Type of Institution",
+    subtitle = "Comparison of Institutions across clusters",
+    x = "Cluster",
+    y = "Proportion of Households (%)",
+    caption = "Data Source: aser_child_household_tib"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "top"
+  ) +
+  geom_text(aes(label = paste0(round(proportion, 1), "%")), 
+              position = position_dodge(width = 0.8), 
+              vjust = -0.5, size = 4, color = "black")
+```
+
+## Clustering Rural Households by Internet Access and Institution Type
+
+The following plot shows the distribution of different types of institutions that students are enrolled in across the three clusters, with separate panels for households with and without internet access. This visualization provides a comprehensive view of how internet availability and institution types are distributed across the clusters.
+
+As we can see, households with internet access are more likely to have students enrolled in private institutions, followed by government institutions. In contrast, households without internet access have a higher proportion of students enrolled in government institutions, followed by private institutions.
+
+This suggests that internet access may be associated with higher socioeconomic status, leading to a higher likelihood of students attending private schools leading to better academic outcomes.
+
+```{r}
+ggplot(aser_child_household_tib_test_2, aes(x = factor(cluster), y = proportion, fill = reorder(InstitutionType, -proportion))) +
+  geom_bar(stat = "identity") +
+  coord_flip() + # Flip the x and y axes for improved readability
+  facet_wrap(~IsInternetAvailable) + # Create separate panels for "Yes" and "No" internet access
+  labs(title = "Distribution of Institution Types by Cluster and Internet Access In Household",
+       x = "Cluster",
+       y = "Proportion",
+       fill = "Institution Type") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::percent_format()) # Format y-axis as percentages
+```
+
+## Conclusion
+
+This project identified three distinct rural household profiles in Pakistan based on socioeconomic factors, climate change impacts, and academic achievements of the students belonging to those surveyed households.
+
+-   **Cluster 1** represents households with low socioeconomic status, high climate change awareness, significant impact from floods, moderate academic achievement, and limited resources.
+-   **Cluster 2** represents households with moderate socioeconomic status, lower climate change awareness, moderate impact from floods, low academic achievement, and slightly more resources than Cluster 1.
+-   **Cluster 3** represents households with high socioeconomic status, lower climate change awareness, moderate impact from floods, high academic achievement, and the most resources among the three clusters.
+
+The analysis also revealed that across the three clusters households with internet access are more likely to have students enrolled in private institutions, while households without internet access have a higher proportion of students enrolled in government institutions. This suggests that internet access may be associated with higher socioeconomic status, leading to better academic outcomes for students attending private schools.
+
+Another way to interpret these results would be to consider the specific case of Cluster 3, which shows resilience to climate change impact despite showing low awareness about climate change compared to Cluster 1. Yet, due to their high socioeconomic status through Internet and/or digital access to communication and information, they are able to provide better educational opportunities for their children, leading to higher academic achievement.
+
+## Discussion and Limitations
+
+The findings of this project have certain limitations beginning with the nature of the data itself. The data is based on self-reported responses from households, which may be subject to recall bias or social desirability bias. Additionally, the survey was conducted in rural areas of Pakistan, which, despite the label, is not a homogeneous group. There may be significant variations within rural areas that are not captured by the data.
+
+Furthermore, this study did not conduct analysis of variance (ANOVA) or other statistical tests to determine the statistical significance of the observed differences in internet access and academic achievement across the clusters. Therefore, the findings should be interpreted as descriptive and exploratory rather than inferential.
+
+Furthermore, the clustering analysis is based on a limited set of variables, which may not fully capture the complexity of rural households in Pakistan.

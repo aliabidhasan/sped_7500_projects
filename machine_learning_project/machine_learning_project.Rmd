@@ -1,0 +1,189 @@
+---
+title: "machine_learning_project"
+author: "Ali Abid"
+date: "2024-11-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Data Wrangling
+
+```{r}
+# Load the libraries
+library(tidyverse)
+library(readr)
+library(caret)
+library(psych)
+```
+
+```{r}
+# Load the data
+aser_child <- read_csv("ITAASER2023Child.csv")
+aser_household <- read_csv("ITAASER2023Household.csv") %>% 
+  rename(HHID = HouseholdId) # Renaming the HouseholdId column to HHID for merging with the Child Dataset
+```
+
+```{r}
+# Merging the two datasets
+aser_child_household_data <- aser_child %>% 
+  left_join(aser_household, by = "HHID")
+```
+
+
+```{r}
+# --- 1. Selecting Relevant Variables from Household-Level, and Child-Level Observations---
+aser_child_household_data <- aser_child_household_data %>% 
+  select(
+    # Dataset Identifiers
+    RNAME,
+    
+    # Household Characteristics
+    HouseType, HouseholdCounter, EarningMembers, Car, MotorCycle, IsHouseOwned, IsElectricityConnectionAvailable, IsTVAvailable, IsRadioAvailable, IsMobileAvailable, IsComputerAvailable, IsInternetAvailable, IsToiletAvailable, 
+    
+    # Time to school
+    TravelTime,
+    
+    # Climate Change Impact
+    ClimateChange, FloodImpacted, EarningImpacted, PsychologicalImpacted, SchoolingAffected,
+
+    # Child Characteristics - EducationalStatus, Grades, InstitutionType, LocalLangReadingLevel, ArithmeticLevel, EnglishReadingLevel
+    C11, C15, C19, C20, C27
+  ) %>%
+  rename(
+    
+    # Child Characteristics - EducationalStatus, Grades, InstitutionType, LocalLangReadingLevel, ArithmeticLevel, EnglishReadingLevel
+    InstitutionType = C11, LocalLangReadingLevel = C15, ArithmeticLevel = C19, EnglishReadingLevel = C20, GeneralKnolwedge = C27
+  
+  )
+```
+
+## Mutating Variables into Binary for Regression Model
+
+```{r}
+# Mutating the variables
+aser_child_household_data <- aser_child_household_data %>% 
+  mutate(ArithmeticLevel = ifelse(ArithmeticLevel > 4, 1, 0)) %>% # 1 means Arithmetic Level is Good, 0 means Arithmetic Level is Poor
+  mutate(EnglishReadingLevel = ifelse(EnglishReadingLevel > 3, 1, 0)) %>% # 1 means Reading Level is Good, 0 means Reading Level is Poor
+  mutate(LocalLangReadingLevel = ifelse(LocalLangReadingLevel > 3, 1, 0)) %>% # 1 means Local Reading Level is Good, 0 means Local Reading Level is Poor
+  mutate(ClimateChange = ifelse(ClimateChange == 1, 1, 0))  %>% # 1 means Climate Change Informed, 0 means Not Informed
+  mutate(FloodImpacted = ifelse(FloodImpacted == 1, 1, 0)) %>% # 1 means Flood Impacted, 0 means Not Impacted
+  mutate(EarningImpacted = ifelse(EarningImpacted == 4, 1, 0)) %>% # 1 means Earning Impacted, 0 means Not Impacted
+  mutate(PsychologicalImpacted = ifelse(PsychologicalImpacted == 1, 1, 0)) %>% # 1 means Psychological Impacted, 0 means Not Impacted
+  mutate(SchoolingAffected = ifelse(SchoolingAffected == 1, 1, 0)) %>% # 1 means Schooling Affected, 0 means Schooling Not Affected
+  mutate(InstitutionType = ifelse(InstitutionType == 1, 1, 0)) %>% # 1 for Government School, 0 for Private or Other School
+  mutate(HouseType = ifelse(HouseType == 3, 1, 0)) # 1 for Pucca House, 0 for Katcha House
+```
+
+## Data Cleaning
+```{r}
+# --- 2. Data Cleaning ---
+# Removing the rows with missing values
+aser_child_household_data <- aser_child_household_data %>%
+  drop_na()
+```
+
+### Finding Out Correlations
+```{r}
+# Correlations
+aser_data_reg <- aser_child_household_data[c(2:8,16:23,25)]
+glimpse(aser_data_reg)
+cor(aser_data_reg)
+```
+
+```{r}
+# Correlation Plot
+library(corrplot)
+corr_matrix <- cor(aser_data_reg)
+corrplot(cor(aser_data_reg), 
+         type="lower", #put color strength on bottom
+         tl.pos = "ld", #Character or logical, position of text labels, 
+         #'ld'(default if type=='lower') means left and diagonal,
+         tl.cex = 0.4, #Numeric, for the size of text label (variable names).
+         method="color", 
+         addCoef.col="darkgray", 
+         diag=FALSE,
+         tl.col="black", #The color of text label.
+         tl.srt=45, #Numeric, for text label string rotation in degrees, see text
+         is.corr = FALSE, #if you include correlation matrix
+         order = "hclust", #order results by strength
+         #col=gray.colors(100), #in case you want it in gray...
+         number.digits = 2) #number of digits after decimal
+
+library(PerformanceAnalytics) #for chart.Correlation
+
+chart.Correlation(aser_data_reg, histogram = TRUE, method = "pearson")
+
+```
+
+```{r}
+# --- Logistic Regression Model using Base R ---
+library(car)
+
+aser_arithmetic_lrm <- glm(GeneralKnolwedge ~ HouseType + MotorCycle + ClimateChange + IsHouseOwned + IsElectricityConnectionAvailable + LocalLangReadingLevel + InstitutionType + SchoolingAffected, data = aser_data_reg, family = "binomial")
+
+summary(aser_arithmetic_lrm)
+
+sqrt(mean(aser_arithmetic_lrm$residuals^2)) # RMSE is around 0.4
+
+car::vif(aser_arithmetic_lrm) # All VIFs are less than 2, so no multicollinearity, it means tolerable VIFs
+```
+## Machine Learning using Caret Package
+
+```{r}
+# --- Machine Learning using Caret Package ---
+library(caret)
+
+# Splitting the data into training and testing sets
+set.seed(123)
+
+#create new variable in tibble for division into training and test sets
+aser_data_reg_machine <- aser_data_reg %>% 
+  mutate(id = row_number())
+
+#70% of data as training set 
+train_set <- aser_data_reg_machine %>% 
+  sample_frac(0.70) #which to select (the 70%)
+
+#30% of data test set 
+test_set  <- anti_join(aser_data_reg_machine, train_set, by = 'id') 
+#anti_join, basically says grab what is in final_tib that is not in train_set
+
+#remove unnecessary variables 
+train_set <- train_set %>% 
+  dplyr::select(-id)
+
+test_set <- test_set %>% 
+  dplyr::select(-id)
+
+# Logistic Regression Model
+
+aser_arithmetic_lrm_caret <- train(GeneralKnolwedge ~ HouseType + MotorCycle + ClimateChange + IsHouseOwned + IsElectricityConnectionAvailable + LocalLangReadingLevel + InstitutionType + SchoolingAffected, data = train_set, method = "glm", family = "binomial")
+
+# Details of the model
+
+summary(aser_arithmetic_lrm_caret)
+
+# Predictions on the test set
+
+fitted_train <- predict(aser_arithmetic_lrm_caret)
+
+actual_train <- train_set$GeneralKnolwedge
+fitted_train <- unname(fitted_train) #would have been a named number vector if unname not used
+
+act_fit_train <- cbind.data.frame(actual_train, fitted_train) #cbind binds the two vectors into a dataframe
+
+# Scatterplot for actual and fitted values
+
+ggplot(act_fit_train, aes(x = actual_train, y = fitted_train)) +
+  geom_point() +
+  xlab("Actual value") +
+  ylab("Predicted value") +
+  ggtitle("Scatterplot for actual and fitted values: Training data") +
+  geom_abline(color = "darkblue",
+              linewidth = 1)
+
+```
